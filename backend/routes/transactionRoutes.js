@@ -4,10 +4,11 @@ import {
   uploadPDF,
   updateCategory,
 } from "../controllers/transactionController.js";
+import { protect } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.post("/upload-pdf", upload.single("file"), uploadPDF);
-router.put("/update-category/:id", updateCategory);
+router.post("/upload-pdf", protect, upload.single("file"), uploadPDF);
+router.put("/update-category/:id", protect, updateCategory);
 
 export default router;

@@ -9,6 +9,16 @@ import MerchantCategory from "../models/MerchantCategory.js";
 // Upload PDF
 export const uploadPDF = async (req, res) => {
   try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No file uploaded" });
+    }
+
+    const userId = req.user.id; // ✅ FIX
+
     const filePath = req.file.path;
 
     const text = await parsePDF(filePath);
@@ -22,17 +32,17 @@ export const uploadPDF = async (req, res) => {
       const category = await detectCategory(
         t.description,
         t.type,
-        req.body.userId,
+        userId, // ✅ FIX
       );
 
       const newTransaction = await Transaction.create({
-        userId: req.body.userId,
+        userId,
         date: t.date,
         description: t.description,
         amount: t.amount,
         type: t.type,
         category: category ? category : "Uncategorized",
-        categorized: category ? true : false,
+        categorized: !!category,
       });
 
       saved.push(newTransaction);
@@ -48,7 +58,8 @@ export const uploadPDF = async (req, res) => {
       uncategorized,
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("UPLOAD ERROR:", error); // ✅ IMPORTANT
+    res.status(500).json({ message: error.message });
   }
 };
 
