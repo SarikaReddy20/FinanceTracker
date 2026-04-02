@@ -5,8 +5,11 @@ import { extractMerchant } from "../services/extractMerchant.js";
 
 import Transaction from "../models/Transaction.js";
 import MerchantCategory from "../models/MerchantCategory.js";
+import { isDuplicateTransaction } from "../utils/duplicateChecker.js";
 
+// =======================
 // Upload PDF
+// =======================
 export const uploadPDF = async (req, res) => {
   try {
     if (!req.user?.id) {
@@ -17,32 +20,64 @@ export const uploadPDF = async (req, res) => {
       return res.status(400).json({ message: "No file uploaded" });
     }
 
-    const userId = req.user.id; // ✅ FIX
-
+    const userId = req.user.id;
     const filePath = req.file.path;
 
     const text = await parsePDF(filePath);
-
     const transactions = extractTransactions(text);
 
-    const uncategorized = [];
     const saved = [];
+    const duplicates = [];
+    const uncategorized = [];
+
+    // 🔥 Prevent duplicates inside same upload
+    const seen = new Set();
 
     for (const t of transactions) {
-      const category = await detectCategory(
-        t.description,
-        t.type,
-        userId, // ✅ FIX
-      );
+      const normalizedDate = new Date(t.date);
+
+      // 🔑 Unique key for same-upload detection
+      const key = `${t.type}-${t.amount}-${t.description}-${normalizedDate.getTime()}`;
+
+      if (seen.has(key)) {
+        duplicates.push({
+          description: t.description,
+          amount: t.amount,
+          date: normalizedDate,
+        });
+        continue;
+      }
+      seen.add(key);
+
+      const category = await detectCategory(t.description, t.type, userId);
+
+      // 🔥 DB duplicate check
+      const isDuplicate = await isDuplicateTransaction({
+        userId,
+        date: normalizedDate,
+        amount: t.amount,
+        description: t.description,
+        type: t.type,
+      });
+
+      if (isDuplicate) {
+        duplicates.push({
+          description: t.description,
+          amount: t.amount,
+          date: normalizedDate,
+        });
+        continue;
+      }
 
       const newTransaction = await Transaction.create({
         userId,
-        date: t.date,
+        date: normalizedDate,
         description: t.description,
         amount: t.amount,
         type: t.type,
-        category: category ? category : "Uncategorized",
+        category: category || "Uncategorized",
         categorized: !!category,
+        source: "PDF",
       });
 
       saved.push(newTransaction);
@@ -54,35 +89,100 @@ export const uploadPDF = async (req, res) => {
 
     res.json({
       message: "PDF processed successfully",
-      total: saved.length,
+      totalAdded: saved.length,
+      duplicatesCount: duplicates.length,
+      duplicates,
       uncategorized,
     });
   } catch (error) {
-    console.error("UPLOAD ERROR:", error); // ✅ IMPORTANT
+    console.error("UPLOAD ERROR:", error);
     res.status(500).json({ message: error.message });
   }
 };
 
-// Update category + save memory
+// =======================
+// Update Category
+// =======================
 export const updateCategory = async (req, res) => {
-  const { category } = req.body;
+  try {
+    const { category } = req.body;
 
-  const transaction = await Transaction.findById(req.params.id);
+    const transaction = await Transaction.findById(req.params.id);
 
-  const merchant = extractMerchant(transaction.description);
+    if (!transaction) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
 
-  if (merchant) {
-    await MerchantCategory.create({
-      userId: transaction.userId,
-      merchant,
-      category,
-    });
+    const merchant = extractMerchant(transaction.description);
+
+    if (merchant) {
+      await MerchantCategory.create({
+        userId: transaction.userId,
+        merchant,
+        category,
+      });
+    }
+
+    transaction.category = category;
+    transaction.categorized = true;
+
+    await transaction.save();
+
+    res.json(transaction);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
+};
 
-  transaction.category = category;
-  transaction.categorized = true;
+// =======================
+// Manual Transaction
+// =======================
+export const addManualTransaction = async (req, res) => {
+  try {
+    const userId = req.user.id;
 
-  await transaction.save();
+    const { date, description, amount, type } = req.body;
 
-  res.json(transaction);
+    if (!date || !description || !amount || !type) {
+      return res.status(400).json({ message: "All fields required" });
+    }
+
+    const normalizedDate = new Date(date);
+
+    const category = await detectCategory(description, type, userId);
+
+    // 🔥 Duplicate check
+    const isDuplicate = await isDuplicateTransaction({
+      userId,
+      date: normalizedDate,
+      amount,
+      description,
+      type,
+    });
+
+    if (isDuplicate) {
+      return res.status(400).json({
+        message: "Duplicate transaction detected",
+      });
+    }
+
+    const transaction = await Transaction.create({
+      userId,
+      date: normalizedDate,
+      description,
+      amount,
+      type,
+      category: category || "Uncategorized",
+      categorized: !!category,
+      source: "MANUAL",
+    });
+
+    res.json({
+      message: "Transaction added successfully",
+      transaction,
+    });
+  } catch (error) {
+    console.error("MANUAL ERROR:", error);
+    res.status(500).json({ message: error.message });
+  }
 };
