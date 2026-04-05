@@ -23,11 +23,14 @@ const transactionSchema = new mongoose.Schema(
 
     source: {
       type: String,
-      enum: ["PDF", "CSV", "MANUAL"],
+      enum: ["PDF", "CSV", "MANUAL", "BILL"],
       default: "PDF",
     },
   },
   { timestamps: true },
 );
+
+transactionSchema.index({ userId: 1, date: 1 });
+transactionSchema.index({ userId: 1, amount: 1, type: 1, date: 1 });
 
 export default mongoose.model("Transaction", transactionSchema);

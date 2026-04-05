@@ -1,16 +1,29 @@
+import fs from "fs/promises";
+
 import { parsePDF } from "../services/pdfParser.js";
 import { extractTransactions } from "../services/transactionExtractor.js";
 import { detectCategory } from "../services/categoryService.js";
 import { extractMerchant } from "../services/extractMerchant.js";
+import { extractBillText } from "../services/billOcrService.js";
+import { extractBillDetails } from "../services/billExtractor.js";
 
 import Transaction from "../models/Transaction.js";
 import MerchantCategory from "../models/MerchantCategory.js";
 import { isDuplicateTransaction } from "../utils/duplicateChecker.js";
+import {
+  serializeTransaction,
+  serializeTransactions,
+  toIstISOString,
+} from "../utils/dateFormatter.js";
+
+const isValidDate = (value) => !Number.isNaN(value.getTime());
 
 // =======================
 // Upload PDF
 // =======================
 export const uploadPDF = async (req, res) => {
+  let filePath;
+
   try {
     if (!req.user?.id) {
       return res.status(401).json({ message: "Unauthorized" });
@@ -21,7 +34,7 @@ export const uploadPDF = async (req, res) => {
     }
 
     const userId = req.user.id;
-    const filePath = req.file.path;
+    filePath = req.file.path;
 
     const text = await parsePDF(filePath);
     const transactions = extractTransactions(text);
@@ -29,21 +42,29 @@ export const uploadPDF = async (req, res) => {
     const saved = [];
     const duplicates = [];
     const uncategorized = [];
+    const invalidRows = [];
 
-    // 🔥 Prevent duplicates inside same upload
     const seen = new Set();
 
     for (const t of transactions) {
       const normalizedDate = new Date(t.date);
 
-      // 🔑 Unique key for same-upload detection
+      if (!isValidDate(normalizedDate)) {
+        invalidRows.push({
+          description: t.description,
+          amount: t.amount,
+          rawDate: t.date,
+        });
+        continue;
+      }
+
       const key = `${t.type}-${t.amount}-${t.description}-${normalizedDate.getTime()}`;
 
       if (seen.has(key)) {
         duplicates.push({
           description: t.description,
           amount: t.amount,
-          date: normalizedDate,
+          date: toIstISOString(normalizedDate),
         });
         continue;
       }
@@ -51,7 +72,6 @@ export const uploadPDF = async (req, res) => {
 
       const category = await detectCategory(t.description, t.type, userId);
 
-      // 🔥 DB duplicate check
       const isDuplicate = await isDuplicateTransaction({
         userId,
         date: normalizedDate,
@@ -64,7 +84,7 @@ export const uploadPDF = async (req, res) => {
         duplicates.push({
           description: t.description,
           amount: t.amount,
-          date: normalizedDate,
+          date: toIstISOString(normalizedDate),
         });
         continue;
       }
@@ -91,12 +111,18 @@ export const uploadPDF = async (req, res) => {
       message: "PDF processed successfully",
       totalAdded: saved.length,
       duplicatesCount: duplicates.length,
+      invalidRowsCount: invalidRows.length,
       duplicates,
-      uncategorized,
+      invalidRows,
+      uncategorized: serializeTransactions(uncategorized),
     });
   } catch (error) {
     console.error("UPLOAD ERROR:", error);
     res.status(500).json({ message: error.message });
+  } finally {
+    if (filePath) {
+      await fs.unlink(filePath).catch(() => {});
+    }
   }
 };
 
@@ -107,7 +133,14 @@ export const updateCategory = async (req, res) => {
   try {
     const { category } = req.body;
 
-    const transaction = await Transaction.findById(req.params.id);
+    if (!category) {
+      return res.status(400).json({ message: "Category is required" });
+    }
+
+    const transaction = await Transaction.findOne({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
 
     if (!transaction) {
       return res.status(404).json({ message: "Transaction not found" });
@@ -116,11 +149,11 @@ export const updateCategory = async (req, res) => {
     const merchant = extractMerchant(transaction.description);
 
     if (merchant) {
-      await MerchantCategory.create({
-        userId: transaction.userId,
-        merchant,
-        category,
-      });
+      await MerchantCategory.findOneAndUpdate(
+        { userId: transaction.userId, merchant },
+        { category },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      );
     }
 
     transaction.category = category;
@@ -128,7 +161,7 @@ export const updateCategory = async (req, res) => {
 
     await transaction.save();
 
-    res.json(transaction);
+    res.json(serializeTransaction(transaction));
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -140,23 +173,36 @@ export const updateCategory = async (req, res) => {
 export const addManualTransaction = async (req, res) => {
   try {
     const userId = req.user.id;
-
     const { date, description, amount, type } = req.body;
 
     if (!date || !description || !amount || !type) {
       return res.status(400).json({ message: "All fields required" });
     }
 
+    if (!["DEBIT", "CREDIT"].includes(type)) {
+      return res.status(400).json({ message: "Invalid transaction type" });
+    }
+
     const normalizedDate = new Date(date);
 
-    const category = await detectCategory(description, type, userId);
+    if (!isValidDate(normalizedDate)) {
+      return res.status(400).json({ message: "Invalid transaction date" });
+    }
 
-    // 🔥 Duplicate check
+    const numericAmount = Number(amount);
+
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ message: "Amount must be a valid number" });
+    }
+
+    const normalizedDescription = description.trim();
+    const category = await detectCategory(normalizedDescription, type, userId);
+
     const isDuplicate = await isDuplicateTransaction({
       userId,
       date: normalizedDate,
-      amount,
-      description,
+      amount: numericAmount,
+      description: normalizedDescription,
       type,
     });
 
@@ -169,8 +215,8 @@ export const addManualTransaction = async (req, res) => {
     const transaction = await Transaction.create({
       userId,
       date: normalizedDate,
-      description,
-      amount,
+      description: normalizedDescription,
+      amount: numericAmount,
       type,
       category: category || "Uncategorized",
       categorized: !!category,
@@ -179,10 +225,130 @@ export const addManualTransaction = async (req, res) => {
 
     res.json({
       message: "Transaction added successfully",
-      transaction,
+      transaction: serializeTransaction(transaction),
     });
   } catch (error) {
     console.error("MANUAL ERROR:", error);
     res.status(500).json({ message: error.message });
+  }
+};
+
+// =======================
+// Upload Bill Image
+// =======================
+export const uploadBill = async (req, res) => {
+  let filePath;
+
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ message: "No bill image uploaded" });
+    }
+
+    const userId = req.user.id;
+    filePath = req.file.path;
+
+    const ocrText = await extractBillText(filePath);
+    const extracted = extractBillDetails(ocrText);
+
+    const finalDescription = (req.body.description || extracted.description || "").trim();
+    const finalAmount = req.body.amount ? Number(req.body.amount) : extracted.amount;
+    const finalDate = req.body.date ? new Date(req.body.date) : extracted.date;
+    const finalType = req.body.type || extracted.type || "DEBIT";
+
+    const missingFields = [];
+
+    if (!finalDescription) {
+      missingFields.push("description");
+    }
+
+    if (!Number.isFinite(finalAmount) || finalAmount <= 0) {
+      missingFields.push("amount");
+    }
+
+    if (!(finalDate instanceof Date) || Number.isNaN(finalDate.getTime())) {
+      missingFields.push("date");
+    }
+
+    if (!["DEBIT", "CREDIT"].includes(finalType)) {
+      missingFields.push("type");
+    }
+
+    const category = finalDescription
+      ? await detectCategory(finalDescription, finalType, userId)
+      : null;
+
+    const lowConfidenceFields = extracted.lowConfidenceFields.filter(
+      (field) => !req.body[field],
+    );
+
+    if (missingFields.length > 0 || lowConfidenceFields.length > 0) {
+      return res.status(200).json({
+        message: "Bill extracted, but some fields need review",
+        needsReview: true,
+        missingFields,
+        lowConfidenceFields,
+        extracted: {
+          description: finalDescription || null,
+          amount: Number.isFinite(finalAmount) ? finalAmount : null,
+          date: finalDate && !Number.isNaN(finalDate.getTime()) ? toIstISOString(finalDate) : null,
+          type: ["DEBIT", "CREDIT"].includes(finalType) ? finalType : null,
+          category: category || "Uncategorized",
+          rawText: ocrText,
+          fieldConfidence: {
+            ...extracted.fieldConfidence,
+            ...(req.body.description ? { description: 1 } : {}),
+            ...(req.body.amount ? { amount: 1 } : {}),
+            ...(req.body.date ? { date: 1, time: extracted.fieldConfidence.time || 0 } : {}),
+            ...(req.body.type ? { type: 1 } : {}),
+          },
+          descriptionCandidates: extracted.descriptionCandidates,
+          amountCandidates: extracted.amountCandidates,
+        },
+      });
+    }
+
+    const isDuplicate = await isDuplicateTransaction({
+      userId,
+      date: finalDate,
+      amount: finalAmount,
+      description: finalDescription,
+      type: finalType,
+    });
+
+    if (isDuplicate) {
+      return res.status(400).json({
+        message: "Duplicate transaction detected",
+      });
+    }
+
+    const transaction = await Transaction.create({
+      userId,
+      date: finalDate,
+      description: finalDescription,
+      amount: finalAmount,
+      type: finalType,
+      category: category || "Uncategorized",
+      categorized: !!category,
+      source: "BILL",
+    });
+
+    return res.json({
+      message: "Bill processed successfully",
+      needsReview: false,
+      transaction: serializeTransaction(transaction),
+      rawText: ocrText,
+      fieldConfidence: extracted.fieldConfidence,
+    });
+  } catch (error) {
+    console.error("BILL OCR ERROR:", error);
+    return res.status(500).json({ message: error.message });
+  } finally {
+    if (filePath) {
+      await fs.unlink(filePath).catch(() => {});
+    }
   }
 };

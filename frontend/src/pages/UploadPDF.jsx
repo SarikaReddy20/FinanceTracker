@@ -2,30 +2,36 @@ import { useState } from "react";
 import API from "../services/api";
 import UncategorizedTable from "../components/UncategorizedTable";
 import Layout from "../components/Layout";
+import { notifyTransactionsUpdated } from "../utils/reportEvents";
 
 function UploadPDF() {
   const [file, setFile] = useState(null);
   const [uncategorized, setUncategorized] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [summary, setSummary] = useState(null);
 
   const handleUpload = async () => {
-    if (!file) return alert("Select file");
+    if (!file) {
+      setError("Select a PDF bank statement first.");
+      return;
+    }
 
     const formData = new FormData();
     formData.append("file", file);
 
     try {
       setLoading(true);
+      setError("");
+      setSummary(null);
 
       const res = await API.post("/transactions/upload-pdf", formData);
 
-      setUncategorized(res.data.uncategorized);
-
-      alert(
-        `Added: ${res.data.totalAdded}, Duplicates: ${res.data.duplicatesCount}`,
-      );
+      setUncategorized(res.data.uncategorized || []);
+      setSummary(res.data);
+      notifyTransactionsUpdated();
     } catch (err) {
-      alert(err.response?.data?.message || "Upload failed");
+      setError(err.response?.data?.message || "Upload failed");
     } finally {
       setLoading(false);
     }
@@ -33,15 +39,76 @@ function UploadPDF() {
 
   return (
     <Layout>
-      <h2>Upload PDF</h2>
+      <section className="glass-card hero-card">
+        <div className="toolbar">
+          <div>
+            <div className="pill">Statement Import</div>
+            <h1 className="headline" style={{ marginTop: 16 }}>
+              Drop in a bank statement and let SpendSmart organize the hard part.
+            </h1>
+            <p className="subtle" style={{ maxWidth: 720, lineHeight: 1.7 }}>
+              Upload a PDF bank statement to extract transactions, skip duplicates, and push fresh spending data into your dashboard and reports.
+            </p>
+          </div>
 
-      <input type="file" onChange={(e) => setFile(e.target.files[0])} />
+          <div className="surface-card upload-panel">
+            <label className="upload-dropzone">
+              <input
+                className="sr-only"
+                type="file"
+                accept=".pdf,application/pdf"
+                onChange={(e) => setFile(e.target.files[0] || null)}
+              />
+              <div className="upload-icon">PDF</div>
+              <div>
+                <strong>{file ? file.name : "Choose a PDF statement"}</strong>
+                <div className="subtle">Only PDF files are accepted.</div>
+              </div>
+            </label>
 
-      <button onClick={handleUpload} disabled={loading}>
-        {loading ? "Uploading..." : "Upload"}
-      </button>
+            <button className="button-primary" onClick={handleUpload} disabled={loading}>
+              {loading ? "Uploading..." : "Upload Statement"}
+            </button>
 
-      <UncategorizedTable data={uncategorized} />
+            {error ? <div className="status-banner status-error">{error}</div> : null}
+          </div>
+        </div>
+      </section>
+
+      {summary ? (
+        <section className="metric-grid">
+          <div className="surface-card metric-card">
+            <div className="subtle">Imported</div>
+            <p className="metric-value">{summary.totalAdded ?? 0}</p>
+          </div>
+          <div className="surface-card metric-card">
+            <div className="subtle">Duplicates Skipped</div>
+            <p className="metric-value">{summary.duplicatesCount ?? 0}</p>
+          </div>
+          <div className="surface-card metric-card">
+            <div className="subtle">Need Review</div>
+            <p className="metric-value">{uncategorized.length}</p>
+          </div>
+        </section>
+      ) : null}
+
+      <section className="surface-card report-card">
+        <div className="toolbar">
+          <div>
+            <h3 style={{ margin: 0 }}>Category Review</h3>
+            <p className="subtle" style={{ margin: "6px 0 0" }}>
+              Any imported items that still need a category can be fixed here.
+            </p>
+          </div>
+        </div>
+
+        <UncategorizedTable
+          data={uncategorized}
+          onUpdated={(id) => {
+            setUncategorized((current) => current.filter((item) => item._id !== id));
+          }}
+        />
+      </section>
     </Layout>
   );
 }
