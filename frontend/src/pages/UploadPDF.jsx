@@ -3,8 +3,10 @@ import API from "../services/api";
 import UncategorizedTable from "../components/UncategorizedTable";
 import Layout from "../components/Layout";
 import { notifyTransactionsUpdated } from "../utils/reportEvents";
+import { useLanguage } from "../context/LanguageContext";
 
 function UploadPDF() {
+  const { t } = useLanguage();
   const [file, setFile] = useState(null);
   const [uncategorized, setUncategorized] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -44,10 +46,10 @@ function UploadPDF() {
           <div>
             <div className="pill">Statement Import</div>
             <h1 className="headline" style={{ marginTop: 16 }}>
-              Drop in a bank statement and let SpendSmart organize the hard part.
+              {t("uploadPdfHero")}
             </h1>
             <p className="subtle" style={{ maxWidth: 720, lineHeight: 1.7 }}>
-              Upload a PDF bank statement to extract transactions, skip duplicates, and push fresh spending data into your dashboard and reports.
+              {t("uploadPdfCopy")}
             </p>
           </div>
 
@@ -61,13 +63,13 @@ function UploadPDF() {
               />
               <div className="upload-icon">PDF</div>
               <div>
-                <strong>{file ? file.name : "Choose a PDF statement"}</strong>
+                <strong>{file ? file.name : t("choosePdf")}</strong>
                 <div className="subtle">Only PDF files are accepted.</div>
               </div>
             </label>
 
             <button className="button-primary" onClick={handleUpload} disabled={loading}>
-              {loading ? "Uploading..." : "Upload Statement"}
+              {loading ? "..." : t("uploadStatement")}
             </button>
 
             {error ? <div className="status-banner status-error">{error}</div> : null}
@@ -78,15 +80,15 @@ function UploadPDF() {
       {summary ? (
         <section className="metric-grid">
           <div className="surface-card metric-card">
-            <div className="subtle">Imported</div>
+            <div className="subtle">{t("imported")}</div>
             <p className="metric-value">{summary.totalAdded ?? 0}</p>
           </div>
           <div className="surface-card metric-card">
-            <div className="subtle">Duplicates Skipped</div>
+            <div className="subtle">{t("duplicatesSkipped")}</div>
             <p className="metric-value">{summary.duplicatesCount ?? 0}</p>
           </div>
           <div className="surface-card metric-card">
-            <div className="subtle">Need Review</div>
+            <div className="subtle">{t("needReview")}</div>
             <p className="metric-value">{uncategorized.length}</p>
           </div>
         </section>
@@ -95,9 +97,9 @@ function UploadPDF() {
       <section className="surface-card report-card">
         <div className="toolbar">
           <div>
-            <h3 style={{ margin: 0 }}>Category Review</h3>
+            <h3 style={{ margin: 0 }}>{t("categoryReview")}</h3>
             <p className="subtle" style={{ margin: "6px 0 0" }}>
-              Any imported items that still need a category can be fixed here.
+              {t("categoryReviewCopy")}
             </p>
           </div>
         </div>

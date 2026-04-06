@@ -6,6 +6,7 @@ const DATE_PATTERNS = [
 
 const TWELVE_HOUR_TIME_PATTERN = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i;
 const TWENTY_FOUR_HOUR_TIME_PATTERN = /\b([01]?\d|2[0-3]):([0-5]\d)\b/;
+const TWENTY_FOUR_HOUR_COMPACT_PATTERN = /\b(?:time[:\s]*)?([01]?\d|2[0-3])([0-5]\d)\s*(?:hrs?)\b/i;
 
 const DESCRIPTION_IGNORE_PATTERNS = [
   /^tax invoice$/i,
@@ -24,6 +25,7 @@ const DESCRIPTION_IGNORE_PATTERNS = [
   /^amount/i,
   /^total/i,
   /^grand total/i,
+  /^party/i,
   /^customer/i,
   /^consumer/i,
   /^contracted/i,
@@ -40,6 +42,7 @@ const DESCRIPTION_BONUSES = [
   { pattern: /\brestaurant|biryani|cafe|bakery|hotel|pharmacy|medical|store|mart|supermarket\b/i, score: 0.2 },
   { pattern: /\btgspdcl|electricity|bill|recharge|airtel|jio|broadband|internet\b/i, score: 0.25 },
   { pattern: /\bgruha jyothi\b/i, score: 0.3 },
+  { pattern: /\bbook\s*shop|book\s*shoppe|stationery|books\b/i, score: 0.28 },
 ];
 
 const AMOUNT_PATTERNS = [
@@ -48,13 +51,18 @@ const AMOUNT_PATTERNS = [
   { label: "grand total", regex: /grand total[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.96 },
   { label: "total amount", regex: /total amount[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.94 },
   { label: "amount paid", regex: /amount paid[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.93 },
+  { label: "total paid", regex: /total paid[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.93 },
+  { label: "cash tendered", regex: /cash tendered[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.92 },
   { label: "net amount", regex: /net amount[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.92 },
+  { label: "cash", regex: /\bcash\b[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.88 },
   { label: "total", regex: /\btotal\b[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.88 },
   { label: "currency", regex: /(?:rs\.?|inr|₹)[^\d-]{0,5}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.72 },
 ];
 
 const normalizeWhitespace = (value) => value.replace(/\s+/g, " ").trim();
 const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
+const isInvoiceNoiseLine = (line) =>
+  /\b(book|shop|shoppe|gstin|state name|mehdipatnam|invoice|customer)\b/i.test(line);
 
 const cleanLines = (text) =>
   text
@@ -150,6 +158,12 @@ const getAmountCandidates = (text) => {
       if (amount === 0 && /net bill amount/i.test(line) && /bill amount/i.test(text)) {
         confidence -= 0.08;
       }
+      if (pattern.label === "currency" && isInvoiceNoiseLine(line)) {
+        confidence -= 0.18;
+      }
+      if (/\d+\.\d{2}\b/.test(match[1])) {
+        confidence += 0.04;
+      }
 
       candidates.push({
         value: amount,
@@ -169,11 +183,12 @@ const getAmountCandidates = (text) => {
     });
   }
 
-  const fallbackLines = lines.filter(
+const fallbackLines = lines.filter(
     (line) =>
       !isDateLikeText(line) &&
       !/^time[:\s]/i.test(line) &&
       !/^dt[:\s]/i.test(line) &&
+      !isInvoiceNoiseLine(line) &&
       (/(?:rs\.?|inr|₹)/i.test(line) || /\d+\.\d{2}\b/.test(line)),
   );
 
@@ -275,6 +290,18 @@ const parseTime = (text) => {
     };
   }
 
+  const compactTwentyFourHourMatch = text.match(TWENTY_FOUR_HOUR_COMPACT_PATTERN);
+  if (compactTwentyFourHourMatch) {
+    return {
+      value: {
+        hours: Number(compactTwentyFourHourMatch[1]),
+        minutes: Number(compactTwentyFourHourMatch[2]),
+        meridiem: null,
+      },
+      confidence: 0.92,
+    };
+  }
+
   return null;
 };
 
@@ -323,6 +350,10 @@ const normalizeDescription = (description, lines) => {
 
   if (joined.includes("jio")) {
     return "Jio Bill";
+  }
+
+  if (joined.includes("universal") && joined.includes("book")) {
+    return "Universal Book Shop";
   }
 
   return description;

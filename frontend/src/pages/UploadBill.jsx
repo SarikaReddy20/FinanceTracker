@@ -2,8 +2,10 @@ import { useState } from "react";
 import API from "../services/api";
 import Layout from "../components/Layout";
 import { notifyTransactionsUpdated } from "../utils/reportEvents";
+import { useLanguage } from "../context/LanguageContext";
 
 function UploadBill() {
+  const { t } = useLanguage();
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -46,10 +48,10 @@ function UploadBill() {
           <div>
             <div className="pill">Bill OCR</div>
             <h1 className="headline" style={{ marginTop: 16 }}>
-              Scan receipts and turn messy bill images into useful transaction data.
+              {t("uploadBillHero")}
             </h1>
             <p className="subtle" style={{ maxWidth: 720, lineHeight: 1.7 }}>
-              Upload a receipt image to extract description, amount, date, time, and field confidence before it lands in your reports.
+              {t("uploadBillCopy")}
             </p>
           </div>
 
@@ -63,13 +65,13 @@ function UploadBill() {
               />
               <div className="upload-icon">OCR</div>
               <div>
-                <strong>{file ? file.name : "Choose a bill image"}</strong>
+                <strong>{file ? file.name : t("chooseBill")}</strong>
                 <div className="subtle">JPG, PNG, and WEBP images work best.</div>
               </div>
             </label>
 
             <button className="button-primary" onClick={handleUpload} disabled={loading}>
-              {loading ? "Processing..." : "Upload Bill"}
+              {loading ? "..." : t("uploadBill")}
             </button>
 
             {error ? <div className="status-banner status-error">{error}</div> : null}
@@ -79,33 +81,33 @@ function UploadBill() {
 
       {result ? (
         <section className="surface-card report-card">
-          <h3>{result.needsReview ? "Needs Review" : "Processed Successfully"}</h3>
+          <h3>{result.needsReview ? t("needsReview") : t("processedSuccessfully")}</h3>
           <p className="subtle">{result.message}</p>
 
           {transaction ? (
             <div className="detail-grid">
               <div className="detail-item">
-                <span className="subtle">Description</span>
+                <span className="subtle">{t("description")}</span>
                 <strong>{transaction.description}</strong>
               </div>
               <div className="detail-item">
-                <span className="subtle">Amount</span>
+                <span className="subtle">{t("amount")}</span>
                 <strong>Rs {transaction.amount}</strong>
               </div>
               <div className="detail-item">
-                <span className="subtle">Category</span>
+                <span className="subtle">{t("category")}</span>
                 <strong>{transaction.category}</strong>
               </div>
               <div className="detail-item">
-                <span className="subtle">Date</span>
+                <span className="subtle">{t("date")}</span>
                 <strong>{transaction.displayDate}</strong>
               </div>
               <div className="detail-item">
-                <span className="subtle">Time</span>
+                <span className="subtle">{t("time")}</span>
                 <strong>{transaction.displayTime}</strong>
               </div>
               <div className="detail-item">
-                <span className="subtle">Source</span>
+                <span className="subtle">{t("source")}</span>
                 <strong>{transaction.source}</strong>
               </div>
             </div>
@@ -114,15 +116,15 @@ function UploadBill() {
           {extracted ? (
             <div className="detail-grid" style={{ marginTop: 18 }}>
               <div className="detail-item">
-                <span className="subtle">Extracted Description</span>
+                <span className="subtle">{t("description")}</span>
                 <strong>{extracted.description || "-"}</strong>
               </div>
               <div className="detail-item">
-                <span className="subtle">Extracted Amount</span>
+                <span className="subtle">{t("amount")}</span>
                 <strong>{extracted.amount ?? "-"}</strong>
               </div>
               <div className="detail-item">
-                <span className="subtle">Extracted Date</span>
+                <span className="subtle">{t("date")}</span>
                 <strong>{extracted.date || "-"}</strong>
               </div>
               <div className="detail-item">
@@ -130,12 +132,12 @@ function UploadBill() {
                 <strong>{extracted.type || "-"}</strong>
               </div>
               <div className="detail-item">
-                <span className="subtle">Category</span>
+                <span className="subtle">{t("category")}</span>
                 <strong>{extracted.category || "-"}</strong>
               </div>
               {extracted.fieldConfidence ? (
                 <div className="detail-item">
-                  <span className="subtle">Confidence</span>
+                  <span className="subtle">{t("confidence")}</span>
                   <strong>
                     Description {Math.round((extracted.fieldConfidence.description || 0) * 100)}%,
                     Amount {Math.round((extracted.fieldConfidence.amount || 0) * 100)}%,
@@ -148,19 +150,19 @@ function UploadBill() {
 
           {result.missingFields?.length ? (
             <div className="status-banner status-warning" style={{ marginTop: 18 }}>
-              <strong>Missing fields:</strong> {result.missingFields.join(", ")}
+              <strong>{t("missingFields")}:</strong> {result.missingFields.join(", ")}
             </div>
           ) : null}
 
           {result.lowConfidenceFields?.length ? (
             <div className="status-banner status-warning" style={{ marginTop: 12 }}>
-              <strong>Low confidence fields:</strong> {result.lowConfidenceFields.join(", ")}
+              <strong>{t("lowConfidenceFields")}:</strong> {result.lowConfidenceFields.join(", ")}
             </div>
           ) : null}
 
           {extracted?.descriptionCandidates?.length ? (
             <div className="surface-card report-card" style={{ marginTop: 18 }}>
-              <h4>Description Candidates</h4>
+              <h4>{t("descriptionCandidates")}</h4>
               <ul>
                 {extracted.descriptionCandidates.map((candidate) => (
                   <li key={`${candidate.value}-${candidate.confidence}`}>
@@ -173,7 +175,7 @@ function UploadBill() {
 
           {extracted?.amountCandidates?.length ? (
             <div className="surface-card report-card" style={{ marginTop: 18 }}>
-              <h4>Amount Candidates</h4>
+              <h4>{t("amountCandidates")}</h4>
               <ul>
                 {extracted.amountCandidates.map((candidate) => (
                   <li key={`${candidate.label}-${candidate.value}-${candidate.confidence}`}>
@@ -186,7 +188,7 @@ function UploadBill() {
 
           {result.rawText ? (
             <div className="surface-card report-card" style={{ marginTop: 18 }}>
-              <h4>OCR Text</h4>
+              <h4>{t("ocrText")}</h4>
               <pre className="ocr-pre">{result.rawText}</pre>
             </div>
           ) : null}

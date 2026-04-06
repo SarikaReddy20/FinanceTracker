@@ -4,8 +4,11 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import UploadPDF from "./pages/UploadPDF";
 import UploadBill from "./pages/UploadBill";
+import ManualTransaction from "./pages/ManualTransaction";
 import Dashboard from "./pages/Dashboard";
 import Reports from "./pages/Reports";
+import Settings from "./pages/Settings";
+import Goals from "./pages/Goals";
 import PrivateRoute from "./components/PrivateRoute";
 
 function App() {
@@ -34,6 +37,15 @@ function App() {
         />
 
         <Route
+          path="/manual-entry"
+          element={
+            <PrivateRoute>
+              <ManualTransaction />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
           path="/dashboard"
           element={
             <PrivateRoute>
@@ -47,6 +59,24 @@ function App() {
           element={
             <PrivateRoute>
               <Reports />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/settings"
+          element={
+            <PrivateRoute>
+              <Settings />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/goals"
+          element={
+            <PrivateRoute>
+              <Goals />
             </PrivateRoute>
           }
         />

@@ -5,6 +5,7 @@ import MonthlyChart from "../components/MonthlyChart";
 import IncomeExpenseChart from "../components/IncomeExpenseChart";
 import Layout from "../components/Layout";
 import { subscribeToTransactionsUpdated } from "../utils/reportEvents";
+import { useLanguage } from "../context/LanguageContext";
 
 const toInputDate = (value) => {
   const year = value.getFullYear();
@@ -24,6 +25,7 @@ const getMonthRange = () => {
 };
 
 function Dashboard() {
+  const { t } = useLanguage();
   const [range, setRange] = useState(getMonthRange);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -105,10 +107,10 @@ function Dashboard() {
           <div>
             <div className="pill">Financial Command Center</div>
             <h1 className="headline" style={{ marginTop: 16 }}>
-              See how your money is moving, where it goes, and what changed.
+              {t("dashboardHero")}
             </h1>
             <p className="subtle" style={{ maxWidth: 700, lineHeight: 1.7 }}>
-              Track spending trends, compare periods, and surface your most important money insights in one place.
+              {t("dashboardCopy")}
             </p>
           </div>
 
@@ -123,40 +125,65 @@ function Dashboard() {
 
       <section className="metric-grid">
         <div className="surface-card metric-card">
-          <div className="subtle">Total Expense</div>
+          <div className="subtle">{t("totalExpense")}</div>
           <p className="metric-value">Rs {report?.totals?.totalExpense?.toFixed(2) ?? "0.00"}</p>
         </div>
         <div className="surface-card metric-card">
-          <div className="subtle">Total Income</div>
+          <div className="subtle">{t("totalIncome")}</div>
           <p className="metric-value">Rs {report?.totals?.totalIncome?.toFixed(2) ?? "0.00"}</p>
         </div>
         <div className="surface-card metric-card">
-          <div className="subtle">Balance</div>
+          <div className="subtle">{t("balance")}</div>
           <p className="metric-value">Rs {report?.totals?.balance?.toFixed(2) ?? "0.00"}</p>
         </div>
         <div className="surface-card metric-card">
-          <div className="subtle">Transactions</div>
+          <div className="subtle">{t("transactions")}</div>
           <p className="metric-value">{report?.totals?.transactionsCount ?? 0}</p>
         </div>
       </section>
 
       <section className="metric-grid">
         <div className="glass-card metric-card">
-          <div className="subtle">Top category</div>
+          <div className="subtle">Financial Health Score</div>
+          <p className="metric-value">{report?.insights?.financialHealth?.score ?? 0}/100</p>
+          <p className="subtle" style={{ marginBottom: 10 }}>
+            {report?.insights?.financialHealth?.label || "Not enough data"}
+          </p>
+          <div className="score-bar">
+            <div
+              className="score-fill"
+              style={{ width: `${report?.insights?.financialHealth?.score ?? 0}%` }}
+            />
+          </div>
+        </div>
+        <div className="glass-card metric-card">
+          <div className="subtle">{t("topCategory")}</div>
           <p className="metric-value" style={{ fontSize: "1.5rem" }}>{report?.insights?.topCategory || "No spending data"}</p>
           <p className="subtle" style={{ marginBottom: 0 }}>Rs {report?.insights?.topCategorySpend?.toFixed(2) ?? "0.00"}</p>
         </div>
         <div className="glass-card metric-card">
-          <div className="subtle">Average daily spend</div>
+          <div className="subtle">{t("averageDailySpend")}</div>
           <p className="metric-value">Rs {report?.insights?.averageDailySpend?.toFixed(2) ?? "0.00"}</p>
         </div>
         <div className="glass-card metric-card">
-          <div className="subtle">Trend vs previous period</div>
+          <div className="subtle">{t("trendVsPrevious")}</div>
           <p className="metric-value" style={{ color: report?.comparison?.trend === "up" ? "var(--danger)" : "var(--brand-strong)" }}>
             {report?.comparison?.changePercent?.toFixed(2) ?? "0.00"}%
           </p>
           <p className="subtle" style={{ marginBottom: 0 }}>
             {(report?.comparison?.change ?? 0) >= 0 ? "+" : ""}Rs {report?.comparison?.change?.toFixed(2) ?? "0.00"}
+          </p>
+        </div>
+        <div className="glass-card metric-card">
+          <div className="subtle">Why this score?</div>
+          <p className="subtle" style={{ margin: "10px 0 6px" }}>
+            Savings ratio: {report?.insights?.financialHealth?.factors?.savingsRatio?.toFixed(2) ?? "0.00"}%
+          </p>
+          <p className="subtle" style={{ margin: "0 0 6px" }}>
+            Overspending frequency: {report?.insights?.financialHealth?.factors?.overspendingFrequency?.toFixed(2) ?? "0.00"}%
+          </p>
+          <p className="subtle" style={{ margin: 0 }}>
+            Category balance: {report?.insights?.financialHealth?.factors?.categoryBalance?.toFixed(2) ?? "0.00"}%
           </p>
         </div>
       </section>
@@ -191,8 +218,8 @@ function Dashboard() {
       <section className="surface-card report-card">
         <div className="toolbar">
           <div>
-            <h3 style={{ margin: 0 }}>Recent Transactions</h3>
-            <p className="subtle" style={{ margin: "6px 0 0" }}>Latest items from the selected range.</p>
+            <h3 style={{ margin: 0 }}>{t("recentTransactions")}</h3>
+            <p className="subtle" style={{ margin: "6px 0 0" }}>{t("latestItems")}</p>
           </div>
         </div>
 
@@ -215,7 +242,7 @@ function Dashboard() {
             ))}
           </div>
         ) : (
-          <div className="empty-state">No transactions found for this range.</div>
+          <div className="empty-state">{t("noTransactions")}</div>
         )}
       </section>
     </Layout>

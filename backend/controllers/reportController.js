@@ -182,6 +182,54 @@ const getPeriodComparison = async ({ userId, startDate, endDate }) => {
   };
 };
 
+const getScoreLabel = (score) => {
+  if (score >= 80) {
+    return "Excellent";
+  }
+
+  if (score >= 65) {
+    return "Healthy";
+  }
+
+  if (score >= 45) {
+    return "Needs Attention";
+  }
+
+  return "At Risk";
+};
+
+const calculateFinancialHealth = ({ totalIncome, totalExpense, categories, daily }) => {
+  const savingsRatio = totalIncome > 0
+    ? Math.max((totalIncome - totalExpense) / totalIncome, 0)
+    : totalExpense > 0 ? 0 : 0.5;
+  const savingsScore = Math.min(savingsRatio / 0.3, 1) * 40;
+
+  const spendingDays = daily.filter((item) => item.expense > 0).length;
+  const overspendingDays = daily.filter((item) => item.expense > item.income && item.expense > 0).length;
+  const overspendingRatio = spendingDays > 0 ? overspendingDays / spendingDays : 0;
+  const overspendingScore = Math.max(1 - overspendingRatio, 0) * 35;
+
+  const categoryShares = categories
+    .map((item) => item.percentage / 100)
+    .filter((share) => share > 0);
+  const entropy = categoryShares.reduce((sum, share) => sum - share * Math.log2(share), 0);
+  const maxEntropy = categoryShares.length > 1 ? Math.log2(categoryShares.length) : 1;
+  const categoryBalanceRatio = categoryShares.length > 1 ? entropy / maxEntropy : categoryShares.length === 1 ? 0.35 : 0.7;
+  const categoryBalanceScore = Math.min(Math.max(categoryBalanceRatio, 0), 1) * 25;
+
+  const score = Math.round(Math.min(savingsScore + overspendingScore + categoryBalanceScore, 100));
+
+  return {
+    score,
+    label: getScoreLabel(score),
+    factors: {
+      savingsRatio: Number((savingsRatio * 100).toFixed(2)),
+      overspendingFrequency: Number((overspendingRatio * 100).toFixed(2)),
+      categoryBalance: Number((Math.max(categoryBalanceRatio, 0) * 100).toFixed(2)),
+    },
+  };
+};
+
 const getSummaryPayload = async ({ userId, startDate, endDate }) => {
   const [categoryBreakdown, totals, daily, weekly, monthly, yearly, comparison, recentTransactions] =
     await Promise.all([
@@ -263,6 +311,12 @@ const getSummaryPayload = async ({ userId, startDate, endDate }) => {
       averageDailySpend: daily.length
         ? Number((totalExpense / daily.length).toFixed(2))
         : 0,
+      financialHealth: calculateFinancialHealth({
+        totalIncome,
+        totalExpense,
+        categories,
+        daily,
+      }),
     },
   };
 };
@@ -405,6 +459,10 @@ export const exportPdfReport = async (req, res) => {
     doc.text(`Top Category: ${payload.insights.topCategory}`);
     doc.text(`Top Category Spend: Rs ${payload.insights.topCategorySpend.toFixed(2)}`);
     doc.text(`Average Daily Spend: Rs ${payload.insights.averageDailySpend.toFixed(2)}`);
+    doc.text(`Financial Health Score: ${payload.insights.financialHealth.score}/100 (${payload.insights.financialHealth.label})`);
+    doc.text(`Savings Ratio: ${payload.insights.financialHealth.factors.savingsRatio.toFixed(2)}%`);
+    doc.text(`Overspending Frequency: ${payload.insights.financialHealth.factors.overspendingFrequency.toFixed(2)}%`);
+    doc.text(`Category Balance: ${payload.insights.financialHealth.factors.categoryBalance.toFixed(2)}%`);
 
     doc.end();
   } catch (error) {

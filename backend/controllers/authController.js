@@ -2,8 +2,10 @@ import User from "../models/User.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
+const SUPPORTED_LANGUAGES = new Set(["en", "hi", "te", "kn"]);
+
 export const registerUser = async (req, res) => {
-  const { name, email, password } = req.body;
+  const { name, email, password, preferredLanguage } = req.body;
 
   try {
     if (!name || !email || !password) {
@@ -26,11 +28,18 @@ export const registerUser = async (req, res) => {
     const user = await User.create({
       name,
       email,
-      password: hashedPassword
+      password: hashedPassword,
+      preferredLanguage: SUPPORTED_LANGUAGES.has(preferredLanguage) ? preferredLanguage : "en",
     });
 
     res.json({
-      message: "User registered successfully"
+      message: "User registered successfully",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        preferredLanguage: user.preferredLanguage,
+      },
     });
 
   } catch (error) {
@@ -78,5 +87,46 @@ export const loginUser = async (req, res) => {
 
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+};
+
+export const getMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("name email preferredLanguage");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.json(user);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+export const updatePreferredLanguage = async (req, res) => {
+  try {
+    const { preferredLanguage } = req.body;
+
+    if (!SUPPORTED_LANGUAGES.has(preferredLanguage)) {
+      return res.status(400).json({ message: "Unsupported language" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { preferredLanguage },
+      { new: true, runValidators: true, select: "name email preferredLanguage" }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.json({
+      message: "Preferred language updated",
+      user,
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 };

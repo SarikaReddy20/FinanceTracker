@@ -253,10 +253,44 @@ select {
   gap: 12px;
 }
 
+.manual-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.manual-field {
+  display: grid;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.manual-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-start;
+}
+
 .metric-card {
   border-radius: 24px;
   padding: 18px;
   animation: fadeUp 420ms ease both;
+}
+
+.score-bar {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand-soft) 65%, transparent 35%);
+  overflow: hidden;
+}
+
+.score-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--brand) 0%, var(--accent) 100%);
+  transition: width 320ms ease;
 }
 
 .metric-value {
@@ -366,6 +400,68 @@ select {
   grid-template-columns: 1.5fr 0.7fr minmax(180px, 220px);
 }
 
+.goal-row {
+  grid-template-columns: 1.4fr 0.8fr 0.8fr auto;
+}
+
+.chatbot-shell {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 30;
+  display: grid;
+  justify-items: end;
+  gap: 12px;
+}
+
+.chatbot-toggle {
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+}
+
+.chatbot-panel {
+  width: min(380px, calc(100vw - 32px));
+  border-radius: 28px;
+  padding: 18px;
+}
+
+.chatbot-messages {
+  max-height: 360px;
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding-right: 4px;
+}
+
+.chat-bubble {
+  border-radius: 18px;
+  padding: 14px;
+  border: 1px solid var(--line);
+}
+
+.chat-bubble.assistant {
+  background: color-mix(in srgb, var(--bg-strong) 92%, transparent 8%);
+}
+
+.chat-bubble.user {
+  background: var(--brand-soft);
+  color: var(--brand-strong);
+}
+
+.chatbot-compose {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.quick-replies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(14px); }
   to { opacity: 1; transform: translateY(0); }
@@ -392,5 +488,19 @@ select {
 
   .category-review-row {
     grid-template-columns: 1fr;
+  }
+
+  .goal-row {
+    grid-template-columns: 1fr;
+  }
+
+  .chatbot-shell {
+    right: 16px;
+    bottom: 16px;
+    left: 16px;
+  }
+
+  .chatbot-panel {
+    width: 100%;
   }
 }

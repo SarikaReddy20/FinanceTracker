@@ -1,10 +1,11 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { useTheme } from "../context/ThemeContext";
+import { useLanguage } from "../context/LanguageContext";
+import ChatbotWidget from "./ChatbotWidget";
 
 function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { theme, toggleTheme } = useTheme();
+  const { t } = useLanguage();
 
   const logout = () => {
     localStorage.clear();
@@ -16,31 +17,38 @@ function Layout({ children }) {
       <div className="page-shell">
         <nav className="glass-card" style={styles.nav}>
           <div>
-            <div className="pill">SpendSmart</div>
+            <div className="pill">{t("appName")}</div>
             <h2 style={styles.brandTitle}>Know where your money flows.</h2>
           </div>
 
           <div className="nav-links">
             <Link className={`nav-link ${location.pathname === "/dashboard" ? "active" : ""}`} to="/dashboard">
-              Dashboard
+              {t("navDashboard")}
             </Link>
             <Link className={`nav-link ${location.pathname === "/reports" ? "active" : ""}`} to="/reports">
-              Reports
+              {t("navReports")}
             </Link>
             <Link className={`nav-link ${location.pathname === "/upload" ? "active" : ""}`} to="/upload">
-              PDF Upload
+              {t("navPdf")}
             </Link>
             <Link className={`nav-link ${location.pathname === "/upload-bill" ? "active" : ""}`} to="/upload-bill">
-              Bill OCR
+              {t("navBill")}
             </Link>
-            <button className="button-secondary" onClick={toggleTheme}>
-              {theme === "light" ? "Dark Mode" : "Light Mode"}
-            </button>
-            <button className="button-primary" onClick={logout}>Logout</button>
+            <Link className={`nav-link ${location.pathname === "/manual-entry" ? "active" : ""}`} to="/manual-entry">
+              Manual Entry
+            </Link>
+            <Link className={`nav-link ${location.pathname === "/goals" ? "active" : ""}`} to="/goals">
+              Goals
+            </Link>
+            <Link className={`nav-link ${location.pathname === "/settings" ? "active" : ""}`} to="/settings">
+              {t("navSettings")}
+            </Link>
+            <button className="button-primary" onClick={logout}>{t("logout")}</button>
           </div>
         </nav>
 
         <main style={styles.container}>{children}</main>
+        <ChatbotWidget />
       </div>
     </div>
   );

@@ -5,6 +5,7 @@ import CategoryChart from "../components/CategoryChart";
 import MonthlyChart from "../components/MonthlyChart";
 import IncomeExpenseChart from "../components/IncomeExpenseChart";
 import { subscribeToTransactionsUpdated } from "../utils/reportEvents";
+import { useLanguage } from "../context/LanguageContext";
 
 const toInputDate = (value) => {
   const year = value.getFullYear();
@@ -25,6 +26,7 @@ const getDefaultRange = () => {
 };
 
 function Reports() {
+  const { t } = useLanguage();
   const [range, setRange] = useState(getDefaultRange);
   const [granularity, setGranularity] = useState("day");
   const [summary, setSummary] = useState(null);
@@ -121,10 +123,10 @@ function Reports() {
           <div>
             <div className="pill">Financial Reports</div>
             <h1 className="headline" style={{ marginTop: 16 }}>
-              Explore trends by day, week, month, year, or your own custom range.
+              {t("reportsHero")}
             </h1>
             <p className="subtle" style={{ maxWidth: 700, lineHeight: 1.7 }}>
-              Compare current spending with previous periods, inspect category contribution, and export your report for offline reference.
+              {t("reportsCopy")}
             </p>
           </div>
 
@@ -133,12 +135,12 @@ function Reports() {
               <input className="field" type="date" name="start" value={range.start} onChange={handleRangeChange} />
               <input className="field" type="date" name="end" value={range.end} onChange={handleRangeChange} />
               <select className="field" value={granularity} onChange={(e) => setGranularity(e.target.value)}>
-                <option value="day">Daily</option>
-                <option value="week">Weekly</option>
-                <option value="month">Monthly</option>
-                <option value="year">Yearly</option>
+                <option value="day">{t("daily")}</option>
+                <option value="week">{t("weekly")}</option>
+                <option value="month">{t("monthly")}</option>
+                <option value="year">{t("yearly")}</option>
               </select>
-              <button className="button-primary" onClick={handleDownload}>Export PDF</button>
+              <button className="button-primary" onClick={handleDownload}>{t("exportPdf")}</button>
             </div>
           </div>
         </div>
@@ -155,19 +157,19 @@ function Reports() {
         <>
           <section className="metric-grid">
             <div className="surface-card metric-card">
-              <div className="subtle">Selected Range Expense</div>
+              <div className="subtle">{t("selectedRangeExpense")}</div>
               <p className="metric-value">Rs {summary.totals.totalExpense.toFixed(2)}</p>
             </div>
             <div className="surface-card metric-card">
-              <div className="subtle">Selected Range Income</div>
+              <div className="subtle">{t("selectedRangeIncome")}</div>
               <p className="metric-value">Rs {summary.totals.totalIncome.toFixed(2)}</p>
             </div>
             <div className="surface-card metric-card">
-              <div className="subtle">Balance</div>
+              <div className="subtle">{t("balance")}</div>
               <p className="metric-value">Rs {summary.totals.balance.toFixed(2)}</p>
             </div>
             <div className="surface-card metric-card">
-              <div className="subtle">Transactions</div>
+              <div className="subtle">{t("transactions")}</div>
               <p className="metric-value">{summary.totals.transactionsCount}</p>
             </div>
           </section>
@@ -200,7 +202,7 @@ function Reports() {
           </section>
 
           <section className="surface-card report-card">
-            <h3 style={{ marginTop: 0 }}>Category Breakdown</h3>
+            <h3 style={{ marginTop: 0 }}>{t("categoryBreakdown")}</h3>
             <div className="table-list" style={{ marginTop: 18 }}>
               {summary.categories.map((item) => (
                 <div className="table-row" key={item.category}>
@@ -208,7 +210,7 @@ function Reports() {
                     <strong>{item.category}</strong>
                     <div className="subtle">{item.percentage.toFixed(2)}% of total expenses</div>
                   </div>
-                  <div className="subtle">Contribution</div>
+                  <div className="subtle">{t("contribution")}</div>
                   <div style={{ fontWeight: 700 }}>Rs {item.total.toFixed(2)}</div>
                 </div>
               ))}

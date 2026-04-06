@@ -17,6 +17,38 @@ import {
 } from "../utils/dateFormatter.js";
 
 const isValidDate = (value) => !Number.isNaN(value.getTime());
+const TIME_ONLY_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+
+const parseManualTransactionDate = (dateInput, timeInput) => {
+  const now = new Date();
+
+  if (!dateInput && !timeInput) {
+    return now;
+  }
+
+  let baseDate = new Date(now);
+
+  if (dateInput) {
+    const parsedDate = new Date(dateInput);
+    if (!isValidDate(parsedDate)) {
+      return null;
+    }
+    baseDate = parsedDate;
+  }
+
+  if (timeInput) {
+    const match = String(timeInput).trim().match(TIME_ONLY_PATTERN);
+    if (!match) {
+      return null;
+    }
+
+    baseDate.setHours(Number(match[1]), Number(match[2]), 0, 0);
+  } else {
+    baseDate.setHours(now.getHours(), now.getMinutes(), now.getSeconds(), 0);
+  }
+
+  return baseDate;
+};
 
 // =======================
 // Upload PDF
@@ -173,20 +205,19 @@ export const updateCategory = async (req, res) => {
 export const addManualTransaction = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { date, description, amount, type } = req.body;
+    const { date, time, description, amount, type, category: manualCategory } = req.body;
 
-    if (!date || !description || !amount || !type) {
-      return res.status(400).json({ message: "All fields required" });
+    if (!description || !amount || !type) {
+      return res.status(400).json({ message: "Description, amount, and type are required" });
     }
 
     if (!["DEBIT", "CREDIT"].includes(type)) {
       return res.status(400).json({ message: "Invalid transaction type" });
     }
 
-    const normalizedDate = new Date(date);
-
-    if (!isValidDate(normalizedDate)) {
-      return res.status(400).json({ message: "Invalid transaction date" });
+    const normalizedDate = parseManualTransactionDate(date, time);
+    if (!normalizedDate || !isValidDate(normalizedDate)) {
+      return res.status(400).json({ message: "Invalid transaction date or time" });
     }
 
     const numericAmount = Number(amount);
@@ -196,7 +227,8 @@ export const addManualTransaction = async (req, res) => {
     }
 
     const normalizedDescription = description.trim();
-    const category = await detectCategory(normalizedDescription, type, userId);
+    const normalizedManualCategory = manualCategory?.trim();
+    const category = normalizedManualCategory || await detectCategory(normalizedDescription, type, userId);
 
     const isDuplicate = await isDuplicateTransaction({
       userId,
