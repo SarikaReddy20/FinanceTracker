@@ -2,6 +2,7 @@ import { useState } from "react";
 import API from "../services/api";
 import Layout from "../components/Layout";
 import { notifyTransactionsUpdated } from "../utils/reportEvents";
+import { useLanguage } from "../context/LanguageContext";
 
 const CATEGORY_OPTIONS = [
   "",
@@ -27,6 +28,7 @@ const INITIAL_FORM = {
 };
 
 function ManualTransaction() {
+  const { t, translateCategory } = useLanguage();
   const [form, setForm] = useState(INITIAL_FORM);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -43,12 +45,12 @@ function ManualTransaction() {
     event.preventDefault();
 
     if (!form.description.trim()) {
-      setError("Description is required.");
+      setError(t("descriptionRequired"));
       return;
     }
 
     if (!form.amount || Number(form.amount) <= 0) {
-      setError("Enter a valid amount.");
+      setError(t("validAmountRequired"));
       return;
     }
 
@@ -80,7 +82,7 @@ function ManualTransaction() {
       setForm(INITIAL_FORM);
       notifyTransactionsUpdated();
     } catch (err) {
-      setError(err.response?.data?.message || "Unable to add transaction.");
+      setError(err.response?.data?.message || t("addTransactionFailed"));
     } finally {
       setLoading(false);
     }
@@ -93,13 +95,12 @@ function ManualTransaction() {
       <section className="glass-card hero-card">
         <div className="toolbar">
           <div>
-            <div className="pill">Manual Entry</div>
+            <div className="pill">{t("manualEntryPill")}</div>
             <h1 className="headline" style={{ marginTop: 16 }}>
-              Add a transaction yourself whenever you need a quick correction or cash record.
+              {t("manualEntryHero")}
             </h1>
             <p className="subtle" style={{ maxWidth: 720, lineHeight: 1.7 }}>
-              Enter the transaction details below. If you leave the date or time empty, SpendSmart will use the
-              current system date and time automatically.
+              {t("manualEntryCopy")}
             </p>
           </div>
         </div>
@@ -108,18 +109,18 @@ function ManualTransaction() {
       <section className="surface-card report-card">
         <form className="manual-form" onSubmit={handleSubmit}>
           <label className="manual-field">
-            <span>Description</span>
+            <span>{t("descriptionLabel")}</span>
             <input
               className="field"
               type="text"
-              placeholder="Paid to bakery, salary credited, cash purchase..."
+              placeholder={t("descriptionPlaceholder")}
               value={form.description}
               onChange={(event) => updateField("description", event.target.value)}
             />
           </label>
 
           <label className="manual-field">
-            <span>Amount</span>
+            <span>{t("amountLabel")}</span>
             <input
               className="field"
               type="number"
@@ -132,19 +133,19 @@ function ManualTransaction() {
           </label>
 
           <label className="manual-field">
-            <span>Type</span>
+            <span>{t("typeLabel")}</span>
             <select
               className="field"
               value={form.type}
               onChange={(event) => updateField("type", event.target.value)}
             >
-              <option value="DEBIT">Debit</option>
-              <option value="CREDIT">Credit</option>
+              <option value="DEBIT">{t("debit")}</option>
+              <option value="CREDIT">{t("credit")}</option>
             </select>
           </label>
 
           <label className="manual-field">
-            <span>Date</span>
+            <span>{t("dateLabel")}</span>
             <input
               className="field"
               type="date"
@@ -154,7 +155,7 @@ function ManualTransaction() {
           </label>
 
           <label className="manual-field">
-            <span>Time</span>
+            <span>{t("timeLabel")}</span>
             <input
               className="field"
               type="time"
@@ -164,16 +165,16 @@ function ManualTransaction() {
           </label>
 
           <label className="manual-field">
-            <span>Category</span>
+            <span>{t("categoryLabel")}</span>
             <select
               className="field"
               value={form.category}
               onChange={(event) => updateField("category", event.target.value)}
             >
-              <option value="">Auto-detect</option>
+              <option value="">{t("autoDetect")}</option>
               {CATEGORY_OPTIONS.filter(Boolean).map((category) => (
                 <option key={category} value={category}>
-                  {category}
+                  {translateCategory(category)}
                 </option>
               ))}
             </select>
@@ -181,7 +182,7 @@ function ManualTransaction() {
 
           <div className="manual-actions">
             <button className="button-primary" type="submit" disabled={loading}>
-              {loading ? "Saving..." : "Add Transaction"}
+              {loading ? t("saving") : t("addTransaction")}
             </button>
           </div>
         </form>
@@ -191,30 +192,30 @@ function ManualTransaction() {
 
       {transaction ? (
         <section className="surface-card report-card">
-          <h3 style={{ marginTop: 0 }}>Transaction added successfully</h3>
+          <h3 style={{ marginTop: 0 }}>{t("transactionAdded")}</h3>
           <div className="detail-grid">
             <div className="detail-item">
-              <span className="subtle">Description</span>
+              <span className="subtle">{t("descriptionLabel")}</span>
               <strong>{transaction.description}</strong>
             </div>
             <div className="detail-item">
-              <span className="subtle">Amount</span>
+              <span className="subtle">{t("amountLabel")}</span>
               <strong>Rs {transaction.amount}</strong>
             </div>
             <div className="detail-item">
-              <span className="subtle">Type</span>
-              <strong>{transaction.type}</strong>
+              <span className="subtle">{t("typeLabel")}</span>
+              <strong>{transaction.type === "DEBIT" ? t("debit") : t("credit")}</strong>
             </div>
             <div className="detail-item">
-              <span className="subtle">Category</span>
-              <strong>{transaction.category}</strong>
+              <span className="subtle">{t("categoryLabel")}</span>
+              <strong>{translateCategory(transaction.category)}</strong>
             </div>
             <div className="detail-item">
-              <span className="subtle">Date</span>
+              <span className="subtle">{t("dateLabel")}</span>
               <strong>{transaction.displayDate}</strong>
             </div>
             <div className="detail-item">
-              <span className="subtle">Time</span>
+              <span className="subtle">{t("timeLabel")}</span>
               <strong>{transaction.displayTime}</strong>
             </div>
           </div>

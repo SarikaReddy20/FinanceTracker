@@ -25,7 +25,7 @@ const getMonthRange = () => {
 };
 
 function Dashboard() {
-  const { t } = useLanguage();
+  const { t, translateCategory, translateHealthLabel } = useLanguage();
   const [range, setRange] = useState(getMonthRange);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,7 @@ function Dashboard() {
         }
       } catch (err) {
         if (isMounted) {
-          setError(err.response?.data?.message || "Failed to load dashboard");
+          setError(err.response?.data?.message || t("dashboardUnavailable"));
         }
       } finally {
         if (isMounted) {
@@ -60,7 +60,7 @@ function Dashboard() {
       isMounted = false;
       unsubscribe();
     };
-  }, [range]);
+  }, [range, t]);
 
   const comparisonChartData = useMemo(() => {
     if (!report) {
@@ -68,12 +68,12 @@ function Dashboard() {
     }
 
     return [
-      { label: "Income", value: report.totals.totalIncome },
-      { label: "Expense", value: report.totals.totalExpense },
-      { label: "Prev Period", value: report.comparison.previous },
-      { label: "Current Period", value: report.comparison.current },
+      { label: t("incomeSeries"), value: report.totals.totalIncome },
+      { label: t("expenseSeries"), value: report.totals.totalExpense },
+      { label: t("previousLabel"), value: report.comparison.previous },
+      { label: t("currentLabel"), value: report.comparison.current },
     ];
-  }, [report]);
+  }, [report, t]);
 
   const handleRangeChange = (event) => {
     setRange((current) => ({
@@ -86,8 +86,8 @@ function Dashboard() {
     return (
       <Layout>
         <div className="surface-card hero-card">
-          <h2 style={{ marginTop: 0 }}>Loading dashboard...</h2>
-          <p className="subtle">Crunching your latest financial trends.</p>
+          <h2 style={{ marginTop: 0 }}>{t("dashboardLoadTitle")}</h2>
+          <p className="subtle">{t("dashboardLoadCopy")}</p>
         </div>
       </Layout>
     );
@@ -97,7 +97,7 @@ function Dashboard() {
     <Layout>
       {error ? (
         <section className="surface-card report-card">
-          <h3 style={{ marginTop: 0 }}>Dashboard unavailable</h3>
+          <h3 style={{ marginTop: 0 }}>{t("dashboardUnavailable")}</h3>
           <p className="subtle">{error}</p>
         </section>
       ) : null}
@@ -105,7 +105,7 @@ function Dashboard() {
       <section className="glass-card hero-card">
         <div className="toolbar">
           <div>
-            <div className="pill">Financial Command Center</div>
+            <div className="pill">{t("financialCommandCenter")}</div>
             <h1 className="headline" style={{ marginTop: 16 }}>
               {t("dashboardHero")}
             </h1>
@@ -144,10 +144,10 @@ function Dashboard() {
 
       <section className="metric-grid">
         <div className="glass-card metric-card">
-          <div className="subtle">Financial Health Score</div>
+          <div className="subtle">{t("financialHealthScore")}</div>
           <p className="metric-value">{report?.insights?.financialHealth?.score ?? 0}/100</p>
           <p className="subtle" style={{ marginBottom: 10 }}>
-            {report?.insights?.financialHealth?.label || "Not enough data"}
+            {report?.insights?.financialHealth?.label ? translateHealthLabel(report.insights.financialHealth.label) : t("notEnoughData")}
           </p>
           <div className="score-bar">
             <div
@@ -158,7 +158,7 @@ function Dashboard() {
         </div>
         <div className="glass-card metric-card">
           <div className="subtle">{t("topCategory")}</div>
-          <p className="metric-value" style={{ fontSize: "1.5rem" }}>{report?.insights?.topCategory || "No spending data"}</p>
+          <p className="metric-value" style={{ fontSize: "1.5rem" }}>{report?.insights?.topCategory ? translateCategory(report.insights.topCategory) : t("noSpendingData")}</p>
           <p className="subtle" style={{ marginBottom: 0 }}>Rs {report?.insights?.topCategorySpend?.toFixed(2) ?? "0.00"}</p>
         </div>
         <div className="glass-card metric-card">
@@ -175,15 +175,15 @@ function Dashboard() {
           </p>
         </div>
         <div className="glass-card metric-card">
-          <div className="subtle">Why this score?</div>
+          <div className="subtle">{t("whyThisScore")}</div>
           <p className="subtle" style={{ margin: "10px 0 6px" }}>
-            Savings ratio: {report?.insights?.financialHealth?.factors?.savingsRatio?.toFixed(2) ?? "0.00"}%
+            {t("savingsRatio")}: {report?.insights?.financialHealth?.factors?.savingsRatio?.toFixed(2) ?? "0.00"}%
           </p>
           <p className="subtle" style={{ margin: "0 0 6px" }}>
-            Overspending frequency: {report?.insights?.financialHealth?.factors?.overspendingFrequency?.toFixed(2) ?? "0.00"}%
+            {t("overspendingFrequency")}: {report?.insights?.financialHealth?.factors?.overspendingFrequency?.toFixed(2) ?? "0.00"}%
           </p>
           <p className="subtle" style={{ margin: 0 }}>
-            Category balance: {report?.insights?.financialHealth?.factors?.categoryBalance?.toFixed(2) ?? "0.00"}%
+            {t("categoryBalanceScore")}: {report?.insights?.financialHealth?.factors?.categoryBalance?.toFixed(2) ?? "0.00"}%
           </p>
         </div>
       </section>
@@ -192,8 +192,8 @@ function Dashboard() {
         <div className="chart-span-7">
           <MonthlyChart
             data={report?.summaries?.daily || []}
-            title="Daily Trend"
-            subtitle="Daily expenses and income in the selected date range."
+            title={t("dailyTrendTitle")}
+            subtitle={t("dailyTrendSubtitle")}
           />
         </div>
         <div className="chart-span-5">
@@ -202,15 +202,15 @@ function Dashboard() {
         <div className="chart-span-6">
           <MonthlyChart
             data={report?.summaries?.weekly || []}
-            title="Weekly View"
-            subtitle="Weekly grouped movement for quick pattern recognition."
+            title={t("weeklyViewTitle")}
+            subtitle={t("weeklyViewSubtitle")}
           />
         </div>
         <div className="chart-span-6">
           <IncomeExpenseChart
             data={comparisonChartData}
-            title="Income / Expense Snapshot"
-            subtitle="Compare your current range against the previous period."
+            title={t("incomeExpenseSnapshotTitle")}
+            subtitle={t("incomeExpenseSnapshotSubtitle")}
           />
         </div>
       </section>
@@ -229,7 +229,7 @@ function Dashboard() {
               <div className="table-row" key={item._id}>
                 <div>
                   <strong>{item.description}</strong>
-                  <div className="subtle">{item.category}</div>
+                  <div className="subtle">{translateCategory(item.category)}</div>
                 </div>
                 <div>
                   {item.displayDate || new Date(item.date).toLocaleDateString("en-IN", { dateStyle: "medium" })}

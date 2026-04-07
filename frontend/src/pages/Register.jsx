@@ -19,10 +19,10 @@ function Register() {
     try {
       setLoading(true);
       await API.post("/auth/register", form);
-      alert("Registered successfully");
+      alert(t("registerSuccess"));
       navigate("/");
     } catch (err) {
-      alert(err.response?.data?.message || "Registration failed");
+      alert(err.response?.data?.message || t("registrationFailed"));
     } finally {
       setLoading(false);
     }
@@ -32,7 +32,7 @@ function Register() {
     <div className="auth-shell">
       <div className="auth-card glass-card">
         <div className="auth-panel" style={styles.hero}>
-          <div className="pill">Create Your Workspace</div>
+          <div className="pill">{t("registerPill")}</div>
           <h1 className="headline" style={{ marginTop: 18 }}>{t("registerHeadline")}</h1>
           <p className="subtle" style={styles.copy}>{t("registerCopy")}</p>
 
@@ -55,9 +55,9 @@ function Register() {
         </div>
 
         <div className="auth-panel surface-card" style={styles.formPanel}>
-          <div className="pill">{theme === "light" ? "Fresh Green Mode" : "Forest Dark Mode"}</div>
+          <div className="pill">{theme === "light" ? t("registerThemeLight") : t("registerThemeDark")}</div>
           <h2 style={{ marginBottom: 8 }}>{t("createAccount")}</h2>
-          <p className="subtle" style={{ marginTop: 0 }}>Register once, then log in to access the dashboard and report center.</p>
+          <p className="subtle" style={{ marginTop: 0 }}>{t("registerPanelCopy")}</p>
 
           <div className="auth-form">
             <input className="field" name="name" placeholder={t("name")} onChange={handleChange} />

@@ -35,10 +35,10 @@ function Layout({ children }) {
               {t("navBill")}
             </Link>
             <Link className={`nav-link ${location.pathname === "/manual-entry" ? "active" : ""}`} to="/manual-entry">
-              Manual Entry
+              {t("navManual")}
             </Link>
             <Link className={`nav-link ${location.pathname === "/goals" ? "active" : ""}`} to="/goals">
-              Goals
+              {t("navGoals")}
             </Link>
             <Link className={`nav-link ${location.pathname === "/settings" ? "active" : ""}`} to="/settings">
               {t("navSettings")}

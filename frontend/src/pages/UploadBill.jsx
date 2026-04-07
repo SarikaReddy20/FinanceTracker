@@ -5,7 +5,7 @@ import { notifyTransactionsUpdated } from "../utils/reportEvents";
 import { useLanguage } from "../context/LanguageContext";
 
 function UploadBill() {
-  const { t } = useLanguage();
+  const { t, translateCategory, translateDocumentType } = useLanguage();
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
@@ -13,7 +13,7 @@ function UploadBill() {
 
   const handleUpload = async () => {
     if (!file) {
-      setError("Select a bill image first.");
+      setError(t("selectBillFirst"));
       return;
     }
 
@@ -32,7 +32,7 @@ function UploadBill() {
         notifyTransactionsUpdated();
       }
     } catch (err) {
-      setError(err.response?.data?.message || "Bill upload failed");
+      setError(err.response?.data?.message || t("billUploadFailed"));
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ function UploadBill() {
       <section className="glass-card hero-card">
         <div className="toolbar">
           <div>
-            <div className="pill">Bill OCR</div>
+            <div className="pill">{t("billOcrPill")}</div>
             <h1 className="headline" style={{ marginTop: 16 }}>
               {t("uploadBillHero")}
             </h1>
@@ -66,7 +66,7 @@ function UploadBill() {
               <div className="upload-icon">OCR</div>
               <div>
                 <strong>{file ? file.name : t("chooseBill")}</strong>
-                <div className="subtle">JPG, PNG, and WEBP images work best.</div>
+                <div className="subtle">{t("imageFormatsHelp")}</div>
               </div>
             </label>
 
@@ -96,7 +96,7 @@ function UploadBill() {
               </div>
               <div className="detail-item">
                 <span className="subtle">{t("category")}</span>
-                <strong>{transaction.category}</strong>
+                <strong>{translateCategory(transaction.category)}</strong>
               </div>
               <div className="detail-item">
                 <span className="subtle">{t("date")}</span>
@@ -108,7 +108,7 @@ function UploadBill() {
               </div>
               <div className="detail-item">
                 <span className="subtle">{t("source")}</span>
-                <strong>{transaction.source}</strong>
+                <strong>{translateDocumentType(transaction.source)}</strong>
               </div>
             </div>
           ) : null}
@@ -128,20 +128,20 @@ function UploadBill() {
                 <strong>{extracted.date || "-"}</strong>
               </div>
               <div className="detail-item">
-                <span className="subtle">Type</span>
-                <strong>{extracted.type || "-"}</strong>
+                <span className="subtle">{t("typeLabel")}</span>
+                <strong>{extracted.type ? t(extracted.type === "DEBIT" ? "debit" : "credit") : "-"}</strong>
               </div>
               <div className="detail-item">
                 <span className="subtle">{t("category")}</span>
-                <strong>{extracted.category || "-"}</strong>
+                <strong>{extracted.category ? translateCategory(extracted.category) : "-"}</strong>
               </div>
               {extracted.fieldConfidence ? (
                 <div className="detail-item">
                   <span className="subtle">{t("confidence")}</span>
                   <strong>
-                    Description {Math.round((extracted.fieldConfidence.description || 0) * 100)}%,
-                    Amount {Math.round((extracted.fieldConfidence.amount || 0) * 100)}%,
-                    Date {Math.round((extracted.fieldConfidence.date || 0) * 100)}%
+                    {t("description")}: {Math.round((extracted.fieldConfidence.description || 0) * 100)}%,{" "}
+                    {t("amount")}: {Math.round((extracted.fieldConfidence.amount || 0) * 100)}%,{" "}
+                    {t("date")}: {Math.round((extracted.fieldConfidence.date || 0) * 100)}%
                   </strong>
                 </div>
               ) : null}
@@ -179,7 +179,7 @@ function UploadBill() {
               <ul>
                 {extracted.amountCandidates.map((candidate) => (
                   <li key={`${candidate.label}-${candidate.value}-${candidate.confidence}`}>
-                    {candidate.value} from {candidate.label} ({Math.round(candidate.confidence * 100)}%)
+                    {candidate.value} ({candidate.label}, {Math.round(candidate.confidence * 100)}%)
                   </li>
                 ))}
               </ul>

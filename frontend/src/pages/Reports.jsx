@@ -26,7 +26,7 @@ const getDefaultRange = () => {
 };
 
 function Reports() {
-  const { t } = useLanguage();
+  const { t, translateCategory } = useLanguage();
   const [range, setRange] = useState(getDefaultRange);
   const [granularity, setGranularity] = useState("day");
   const [summary, setSummary] = useState(null);
@@ -52,7 +52,7 @@ function Reports() {
         }
       } catch (error) {
         if (isMounted) {
-          setError(error.response?.data?.message || "Failed to load reports");
+          setError(error.response?.data?.message || t("reportsUnavailable"));
         }
       } finally {
         if (isMounted) {
@@ -68,7 +68,7 @@ function Reports() {
       isMounted = false;
       unsubscribe();
     };
-  }, [range, granularity]);
+  }, [range, granularity, t]);
 
   const comparisonBars = useMemo(() => {
     if (!summary) {
@@ -76,11 +76,11 @@ function Reports() {
     }
 
     return [
-      { label: "Current", value: summary.comparison.current },
-      { label: "Previous", value: summary.comparison.previous },
-      { label: "Change", value: Math.abs(summary.comparison.change) },
+      { label: t("currentLabel"), value: summary.comparison.current },
+      { label: t("previousLabel"), value: summary.comparison.previous },
+      { label: t("changeLabel"), value: Math.abs(summary.comparison.change) },
     ];
-  }, [summary]);
+  }, [summary, t]);
 
   const handleDownload = async () => {
     try {
@@ -89,7 +89,9 @@ function Reports() {
         responseType: "blob",
       });
 
-      const blobUrl = window.URL.createObjectURL(new Blob([res.data], { type: "application/pdf" }));
+      const blobUrl = window.URL.createObjectURL(
+        new Blob([res.data], { type: "application/pdf" }),
+      );
       const link = document.createElement("a");
       link.href = blobUrl;
       link.download = `spendsmart-report-${range.start}-to-${range.end}.pdf`;
@@ -98,7 +100,7 @@ function Reports() {
       link.remove();
       window.URL.revokeObjectURL(blobUrl);
     } catch (error) {
-      alert(error.response?.data?.message || "Failed to export report");
+      alert(error.response?.data?.message || t("exportFailed"));
     }
   };
 
@@ -113,7 +115,7 @@ function Reports() {
     <Layout>
       {error ? (
         <section className="surface-card report-card">
-          <h3 style={{ marginTop: 0 }}>Reports unavailable</h3>
+          <h3 style={{ marginTop: 0 }}>{t("reportsUnavailable")}</h3>
           <p className="subtle">{error}</p>
         </section>
       ) : null}
@@ -121,7 +123,7 @@ function Reports() {
       <section className="glass-card hero-card">
         <div className="toolbar">
           <div>
-            <div className="pill">Financial Reports</div>
+            <div className="pill">{t("financialReports")}</div>
             <h1 className="headline" style={{ marginTop: 16 }}>
               {t("reportsHero")}
             </h1>
@@ -132,15 +134,23 @@ function Reports() {
 
           <div className="report-card surface-card">
             <div className="filters">
-              <input className="field" type="date" name="start" value={range.start} onChange={handleRangeChange} />
-              <input className="field" type="date" name="end" value={range.end} onChange={handleRangeChange} />
-              <select className="field" value={granularity} onChange={(e) => setGranularity(e.target.value)}>
-                <option value="day">{t("daily")}</option>
-                <option value="week">{t("weekly")}</option>
-                <option value="month">{t("monthly")}</option>
-                <option value="year">{t("yearly")}</option>
-              </select>
-              <button className="button-primary" onClick={handleDownload}>{t("exportPdf")}</button>
+              <input
+                className="field"
+                type="date"
+                name="start"
+                value={range.start}
+                onChange={handleRangeChange}
+              />
+              <input
+                className="field"
+                type="date"
+                name="end"
+                value={range.end}
+                onChange={handleRangeChange}
+              />
+              <button className="button-primary" onClick={handleDownload}>
+                {t("exportPdf")}
+              </button>
             </div>
           </div>
         </div>
@@ -148,8 +158,8 @@ function Reports() {
 
       {loading && !summary ? (
         <div className="surface-card report-card">
-          <h3 style={{ marginTop: 0 }}>Loading reports...</h3>
-          <p className="subtle">Preparing trends and financial comparisons.</p>
+          <h3 style={{ marginTop: 0 }}>{t("reportsLoadingTitle")}</h3>
+          <p className="subtle">{t("reportsLoadingCopy")}</p>
         </div>
       ) : null}
 
@@ -158,15 +168,21 @@ function Reports() {
           <section className="metric-grid">
             <div className="surface-card metric-card">
               <div className="subtle">{t("selectedRangeExpense")}</div>
-              <p className="metric-value">Rs {summary.totals.totalExpense.toFixed(2)}</p>
+              <p className="metric-value">
+                Rs {summary.totals.totalExpense.toFixed(2)}
+              </p>
             </div>
             <div className="surface-card metric-card">
               <div className="subtle">{t("selectedRangeIncome")}</div>
-              <p className="metric-value">Rs {summary.totals.totalIncome.toFixed(2)}</p>
+              <p className="metric-value">
+                Rs {summary.totals.totalIncome.toFixed(2)}
+              </p>
             </div>
             <div className="surface-card metric-card">
               <div className="subtle">{t("balance")}</div>
-              <p className="metric-value">Rs {summary.totals.balance.toFixed(2)}</p>
+              <p className="metric-value">
+                Rs {summary.totals.balance.toFixed(2)}
+              </p>
             </div>
             <div className="surface-card metric-card">
               <div className="subtle">{t("transactions")}</div>
@@ -178,25 +194,28 @@ function Reports() {
             <div className="chart-span-7">
               <MonthlyChart
                 data={trend}
-                title={`${granularity[0].toUpperCase()}${granularity.slice(1)} Trend`}
-                subtitle="Trend breakdown for the selected custom date range."
+                title={`${t(granularity === "day" ? "daily" : granularity === "week" ? "weekly" : granularity === "month" ? "monthly" : "yearly")} ${t("trendTitleSuffix")}`}
+                subtitle={t("trendSelectedRangeSubtitle")}
               />
             </div>
             <div className="chart-span-5">
-              <CategoryChart data={summary.categories} title="Category Percentage" />
+              <CategoryChart
+                data={summary.categories}
+                title={t("categoryBreakdown")}
+              />
             </div>
             <div className="chart-span-6">
               <MonthlyChart
                 data={summary.summaries.monthly}
-                title="Monthly Summary"
-                subtitle="Month-wise overview inside the selected range."
+                title={t("monthlySummaryTitle")}
+                subtitle={t("monthlySummarySubtitle")}
               />
             </div>
             <div className="chart-span-6">
               <IncomeExpenseChart
                 data={comparisonBars}
-                title="Period Comparison"
-                subtitle={`Current vs previous period: ${summary.comparison.changePercent.toFixed(2)}% ${summary.comparison.trend}`}
+                title={t("periodComparisonTitle")}
+                subtitle={`${t("currentLabel")} vs ${t("previousLabel")}: ${summary.comparison.changePercent.toFixed(2)}% ${t(summary.comparison.trend === "up" ? "trendUp" : summary.comparison.trend === "down" ? "trendDown" : "trendFlat")}`}
               />
             </div>
           </section>
@@ -207,11 +226,15 @@ function Reports() {
               {summary.categories.map((item) => (
                 <div className="table-row" key={item.category}>
                   <div>
-                    <strong>{item.category}</strong>
-                    <div className="subtle">{item.percentage.toFixed(2)}% of total expenses</div>
+                    <strong>{translateCategory(item.category)}</strong>
+                    <div className="subtle">
+                      {item.percentage.toFixed(2)}% {t("totalExpensesShare")}
+                    </div>
                   </div>
                   <div className="subtle">{t("contribution")}</div>
-                  <div style={{ fontWeight: 700 }}>Rs {item.total.toFixed(2)}</div>
+                  <div style={{ fontWeight: 700 }}>
+                    Rs {item.total.toFixed(2)}
+                  </div>
                 </div>
               ))}
             </div>

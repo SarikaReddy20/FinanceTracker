@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import API from "../services/api";
 import Layout from "../components/Layout";
+import { useLanguage } from "../context/LanguageContext";
 
 const getDefaultTargetDate = () => {
   const date = new Date();
@@ -51,6 +52,7 @@ const calculatePreview = ({ targetAmount, currentSaved, targetDate }) => {
 };
 
 function Goals() {
+  const { t } = useLanguage();
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,21 +68,21 @@ function Goals() {
 
   const preview = useMemo(() => calculatePreview(form), [form]);
 
-  const loadGoals = async () => {
-    try {
-      setLoading(true);
-      const res = await API.get("/goals");
-      setGoals(res.data.goals || []);
-    } catch (error) {
-      setStatus(error.response?.data?.message || "Failed to load goals");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const loadGoals = async () => {
+      try {
+        setLoading(true);
+        const res = await API.get("/goals");
+        setGoals(res.data.goals || []);
+      } catch (error) {
+        setStatus(error.response?.data?.message || t("goalsLoadFailed"));
+      } finally {
+        setLoading(false);
+      }
+    };
+
     loadGoals();
-  }, []);
+  }, [t]);
 
   const handleChange = (event) => {
     setForm((current) => ({
@@ -117,7 +119,7 @@ function Goals() {
     const currentSaved = Number(form.currentSaved || 0);
 
     if (Number.isFinite(targetAmount) && Number.isFinite(currentSaved) && currentSaved > targetAmount) {
-      setStatus("Already saved amount cannot be greater than the target amount.");
+      setStatus(t("savedGreaterThanTarget"));
       return;
     }
 
@@ -138,9 +140,9 @@ function Goals() {
         return [...current, res.data.goal].sort((a, b) => new Date(a.targetDate) - new Date(b.targetDate));
       });
       resetForm();
-      setStatus(editingGoalId ? "Goal updated successfully." : "Goal plan created successfully.");
+      setStatus(editingGoalId ? t("goalUpdated") : t("goalCreated"));
     } catch (error) {
-      setStatus(error.response?.data?.message || (editingGoalId ? "Failed to update goal" : "Failed to create goal"));
+      setStatus(error.response?.data?.message || (editingGoalId ? t("goalUpdateFailed") : t("goalCreateFailed")));
     } finally {
       setSaving(false);
     }
@@ -154,19 +156,19 @@ function Goals() {
         resetForm();
       }
     } catch (error) {
-      setStatus(error.response?.data?.message || "Failed to delete goal");
+      setStatus(error.response?.data?.message || t("goalDeleteFailed"));
     }
   };
 
   return (
     <Layout>
       <section className="glass-card hero-card">
-        <div className="pill">Goal-Based Saving Planner</div>
+        <div className="pill">{t("goalsHeroPill")}</div>
         <h1 className="headline" style={{ marginTop: 16 }}>
-          Turn future purchases into a clear monthly saving plan.
+          {t("goalsHeroTitle")}
         </h1>
         <p className="subtle" style={{ maxWidth: 760, lineHeight: 1.7 }}>
-          Add a goal like laptop, bike, travel, or emergency fund. SpendSmart calculates how much you need to save every month based on your target amount, what you already saved, and your deadline.
+          {t("goalsHeroCopy")}
         </p>
       </section>
 
@@ -176,28 +178,28 @@ function Goals() {
             <div className="toolbar">
               <div>
                 <h3 style={{ marginTop: 0, marginBottom: 0 }}>
-                  {editingGoalId ? "Edit Goal Plan" : "Create Goal Plan"}
+                  {editingGoalId ? t("editGoalPlan") : t("createGoalPlan")}
                 </h3>
                 <p className="subtle" style={{ margin: "6px 0 0" }}>
                   {editingGoalId
-                    ? "Update the saved amount or target details whenever you make progress."
-                    : "Set a target amount, deadline, and how much you already saved."}
+                    ? t("editGoalCopy")
+                    : t("createGoalCopy")}
                 </p>
               </div>
               {editingGoalId ? (
                 <button className="button-secondary" onClick={resetForm}>
-                  Cancel Edit
+                  {t("cancelEdit")}
                 </button>
               ) : null}
             </div>
             <div className="auth-form" style={{ marginTop: 18 }}>
-              <input className="field" name="title" placeholder="Goal title" value={form.title} onChange={handleChange} />
-              <input className="field" name="targetAmount" placeholder="Target amount" value={form.targetAmount} onChange={handleChange} />
-              <input className="field" name="currentSaved" placeholder="Already saved" value={form.currentSaved} onChange={handleChange} />
+              <input className="field" name="title" placeholder={t("goalTitlePlaceholder")} value={form.title} onChange={handleChange} />
+              <input className="field" name="targetAmount" placeholder={t("targetAmountPlaceholder")} value={form.targetAmount} onChange={handleChange} />
+              <input className="field" name="currentSaved" placeholder={t("currentSavedPlaceholder")} value={form.currentSaved} onChange={handleChange} />
               <input className="field" type="date" name="targetDate" value={form.targetDate} onChange={handleChange} />
-              <textarea className="field" name="notes" placeholder="Notes (optional)" value={form.notes} onChange={handleChange} rows={4} />
+              <textarea className="field" name="notes" placeholder={t("notesPlaceholder")} value={form.notes} onChange={handleChange} rows={4} />
               <button className="button-primary" onClick={handleSubmit} disabled={saving}>
-                {saving ? "Saving..." : editingGoalId ? "Update Goal" : "Create Plan"}
+                {saving ? t("saving") : editingGoalId ? t("updateGoal") : t("createPlan")}
               </button>
               {status ? <p className="subtle" style={{ marginBottom: 0 }}>{status}</p> : null}
             </div>
@@ -206,18 +208,18 @@ function Goals() {
 
         <div className="chart-span-5">
           <div className="surface-card report-card">
-            <h3 style={{ marginTop: 0 }}>Planner Preview</h3>
+            <h3 style={{ marginTop: 0 }}>{t("plannerPreview")}</h3>
             <div className="metric-grid" style={{ marginTop: 16 }}>
               <div className="metric-card surface-card">
-                <div className="subtle">Remaining</div>
+                <div className="subtle">{t("remaining")}</div>
                 <p className="metric-value">Rs {preview.remainingAmount.toFixed(2)}</p>
               </div>
               <div className="metric-card surface-card">
-                <div className="subtle">Months Left</div>
+                <div className="subtle">{t("monthsLeft")}</div>
                 <p className="metric-value">{preview.monthsRemaining}</p>
               </div>
               <div className="metric-card surface-card">
-                <div className="subtle">Save Per Month</div>
+                <div className="subtle">{t("savePerMonth")}</div>
                 <p className="metric-value">Rs {preview.monthlyRequired.toFixed(2)}</p>
               </div>
             </div>
@@ -228,45 +230,45 @@ function Goals() {
       <section className="surface-card report-card">
         <div className="toolbar">
           <div>
-            <h3 style={{ margin: 0 }}>My Saving Goals</h3>
+            <h3 style={{ margin: 0 }}>{t("mySavingGoals")}</h3>
             <p className="subtle" style={{ margin: "6px 0 0" }}>
-              Track your targets and see how much you need to save each month to stay on pace.
+              {t("mySavingGoalsCopy")}
             </p>
           </div>
         </div>
 
         {loading ? (
-          <div className="empty-state">Loading your goals...</div>
+          <div className="empty-state">{t("loadingGoals")}</div>
         ) : goals.length ? (
           <div className="table-list" style={{ marginTop: 18 }}>
             {goals.map((goal) => (
               <div className="table-row goal-row" key={goal._id}>
                 <div>
                   <strong>{goal.title}</strong>
-                  <div className="subtle">Target: Rs {goal.targetAmount.toFixed(2)} by {new Date(goal.targetDate).toLocaleDateString("en-IN", { dateStyle: "medium" })}</div>
+                  <div className="subtle">{t("targetBy")}: Rs {goal.targetAmount.toFixed(2)} by {new Date(goal.targetDate).toLocaleDateString("en-IN", { dateStyle: "medium" })}</div>
                   {goal.notes ? <div className="subtle">{goal.notes}</div> : null}
                 </div>
                 <div>
-                  <div className="subtle">Saved</div>
+                  <div className="subtle">{t("saved")}</div>
                   <strong>Rs {goal.currentSaved.toFixed(2)}</strong>
-                  <div className="subtle">{goal.progressPercent.toFixed(1)}% complete</div>
+                  <div className="subtle">{goal.progressPercent.toFixed(1)}% {t("complete")}</div>
                 </div>
                 <div>
-                  <div className="subtle">Monthly Plan</div>
+                  <div className="subtle">{t("monthlyPlan")}</div>
                   <strong>Rs {goal.monthlyRequired.toFixed(2)}</strong>
-                  <div className="subtle">{goal.monthsRemaining} months left</div>
+                  <div className="subtle">{goal.monthsRemaining} {t("monthsLeftSuffix")}</div>
                 </div>
                 <div>
                   <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" }}>
-                    <button className="button-secondary" onClick={() => handleEdit(goal)}>Edit</button>
-                    <button className="button-secondary" onClick={() => handleDelete(goal._id)}>Delete</button>
+                    <button className="button-secondary" onClick={() => handleEdit(goal)}>{t("edit")}</button>
+                    <button className="button-secondary" onClick={() => handleDelete(goal._id)}>{t("delete")}</button>
                   </div>
                 </div>
               </div>
             ))}
           </div>
         ) : (
-          <div className="empty-state">No saving goals yet. Create your first plan above.</div>
+          <div className="empty-state">{t("noGoalsYet")}</div>
         )}
       </section>
     </Layout>

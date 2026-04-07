@@ -7,16 +7,21 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { useLanguage } from "../context/LanguageContext";
 
-function IncomeExpenseChart({ data, title = "Comparison Snapshot", subtitle = "Quick comparison for the selected period." }) {
+function IncomeExpenseChart({ data, title, subtitle }) {
+  const { t } = useLanguage();
+  const resolvedTitle = title || t("comparisonSnapshotTitle");
+  const resolvedSubtitle = subtitle || t("comparisonSnapshotSubtitle");
+
   if (!data?.length) {
-    return <div className="empty-state">No comparison data available.</div>;
+    return <div className="empty-state">{t("noComparisonData")}</div>;
   }
 
   return (
     <div className="surface-card chart-card">
-      <h3 style={{ margin: 0 }}>{title}</h3>
-      <p className="subtle" style={{ margin: "6px 0 18px" }}>{subtitle}</p>
+      <h3 style={{ margin: 0 }}>{resolvedTitle}</h3>
+      <p className="subtle" style={{ margin: "6px 0 18px" }}>{resolvedSubtitle}</p>
 
       <ResponsiveContainer width="100%" height={280}>
         <BarChart data={data}>

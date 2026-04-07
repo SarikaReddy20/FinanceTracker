@@ -7,6 +7,7 @@ import transactionRoutes from "./routes/transactionRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
 import chatbotRoutes from "./routes/chatbotRoutes.js";
 import goalRoutes from "./routes/goalRoutes.js";
+import uploadedDocumentRoutes from "./routes/uploadedDocumentRoutes.js";
 
 dotenv.config();
 
@@ -30,3 +31,4 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/chatbot", chatbotRoutes);
 app.use("/api/goals", goalRoutes);
+app.use("/api/uploaded-documents", uploadedDocumentRoutes);

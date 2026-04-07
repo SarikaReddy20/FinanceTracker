@@ -1,5 +1,6 @@
 import API from "../services/api";
 import { notifyTransactionsUpdated } from "../utils/reportEvents";
+import { useLanguage } from "../context/LanguageContext";
 
 const CATEGORY_OPTIONS = [
   "Food",
@@ -14,6 +15,8 @@ const CATEGORY_OPTIONS = [
 ];
 
 function UncategorizedTable({ data, onUpdated }) {
+  const { t, translateCategory } = useLanguage();
+
   const updateCategory = async (id, category) => {
     if (!category) return;
 
@@ -21,11 +24,11 @@ function UncategorizedTable({ data, onUpdated }) {
     notifyTransactionsUpdated();
     onUpdated?.(id);
 
-    alert("Updated");
+    alert(t("updated"));
   };
 
   if (!data.length) {
-    return <div className="empty-state">No uncategorized transactions right now.</div>;
+    return <div className="empty-state">{t("noUncategorizedTransactions")}</div>;
   }
 
   return (
@@ -39,12 +42,12 @@ function UncategorizedTable({ data, onUpdated }) {
             </div>
           </div>
 
-          <div className="subtle">{item.category || "Uncategorized"}</div>
+          <div className="subtle">{translateCategory(item.category || "Uncategorized")}</div>
 
           <select className="field" onChange={(e) => updateCategory(item._id, e.target.value)}>
-            <option value="">Select</option>
+            <option value="">{t("select")}</option>
             {CATEGORY_OPTIONS.map((option) => (
-              <option key={option}>{option}</option>
+              <option key={option}>{translateCategory(option)}</option>
             ))}
           </select>
         </div>

@@ -34,7 +34,7 @@ function ChatbotWidget() {
     } catch {
       setMessages((current) => [
         ...current,
-        { role: "assistant", content: "Assistant is unavailable right now." },
+        { role: "assistant", content: t("assistantUnavailable") },
       ]);
     } finally {
       setLoading(false);
@@ -61,7 +61,7 @@ function ChatbotWidget() {
                 ) : null}
                 {message.quickReplies?.length ? (
                   <div className="quick-replies">
-                    {message.quickReplies.map((reply) => (
+                  {message.quickReplies.map((reply) => (
                       <button key={reply} className="button-secondary" onClick={() => sendMessage(reply)}>
                         {reply}
                       </button>
@@ -73,7 +73,7 @@ function ChatbotWidget() {
               <div className="chat-bubble assistant">
                 <div>{t("chatTitle")}</div>
                 <p className="subtle" style={{ marginBottom: 0 }}>
-                  {t("askSuggestions")}: Reports, monthly expenses, why did I spend more, unusual transactions, saving suggestions.
+                  {t("askSuggestions")}: {t("chatSuggestionsList")}
                 </p>
               </div>
             )}

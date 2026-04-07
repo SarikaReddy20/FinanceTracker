@@ -7,6 +7,11 @@ const transactionSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    sourceDocumentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "UploadedDocument",
+      default: null,
+    },
     date: { type: Date, required: true },
     description: { type: String, required: true },
     amount: { type: Number, required: true },
@@ -32,5 +37,6 @@ const transactionSchema = new mongoose.Schema(
 
 transactionSchema.index({ userId: 1, date: 1 });
 transactionSchema.index({ userId: 1, amount: 1, type: 1, date: 1 });
+transactionSchema.index({ userId: 1, sourceDocumentId: 1 });
 
 export default mongoose.model("Transaction", transactionSchema);

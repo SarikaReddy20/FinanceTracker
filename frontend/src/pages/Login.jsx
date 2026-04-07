@@ -28,7 +28,7 @@ function Login() {
 
       navigate("/dashboard");
     } catch (err) {
-      alert(err.response?.data?.message || "Login failed");
+      alert(err.response?.data?.message || t("loginFailed"));
     } finally {
       setLoading(false);
     }
@@ -38,7 +38,7 @@ function Login() {
     <div className="auth-shell">
       <div className="auth-card glass-card">
         <div className="auth-panel" style={styles.hero}>
-          <div className="pill">SpendSmart Analytics</div>
+          <div className="pill">{t("loginPill")}</div>
           <h1 className="headline" style={{ marginTop: 18 }}>{t("loginHeadline")}</h1>
           <p className="subtle" style={styles.copy}>{t("loginCopy")}</p>
 
@@ -54,9 +54,8 @@ function Login() {
         </div>
 
         <div className="auth-panel surface-card" style={styles.formPanel}>
-          <div className="pill">{theme === "light" ? "Green Light Theme" : "Deep Green Night Theme"}</div>
           <h2 style={{ marginBottom: 8 }}>{t("welcomeBack")}</h2>
-          <p className="subtle" style={{ marginTop: 0 }}>Log in to view your financial dashboard, reports, and upload tools.</p>
+          <p className="subtle" style={{ marginTop: 0 }}>{t("loginPanelCopy")}</p>
 
           <div className="auth-form">
             <input className="field" name="email" placeholder={t("email")} onChange={handleChange} />

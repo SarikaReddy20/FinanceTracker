@@ -15,7 +15,7 @@ function UploadPDF() {
 
   const handleUpload = async () => {
     if (!file) {
-      setError("Select a PDF bank statement first.");
+      setError(t("selectPdfFirst"));
       return;
     }
 
@@ -33,7 +33,7 @@ function UploadPDF() {
       setSummary(res.data);
       notifyTransactionsUpdated();
     } catch (err) {
-      setError(err.response?.data?.message || "Upload failed");
+      setError(err.response?.data?.message || t("uploadFailed"));
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ function UploadPDF() {
       <section className="glass-card hero-card">
         <div className="toolbar">
           <div>
-            <div className="pill">Statement Import</div>
+            <div className="pill">{t("statementImport")}</div>
             <h1 className="headline" style={{ marginTop: 16 }}>
               {t("uploadPdfHero")}
             </h1>
@@ -64,7 +64,7 @@ function UploadPDF() {
               <div className="upload-icon">PDF</div>
               <div>
                 <strong>{file ? file.name : t("choosePdf")}</strong>
-                <div className="subtle">Only PDF files are accepted.</div>
+                <div className="subtle">{t("onlyPdfAccepted")}</div>
               </div>
             </label>
 

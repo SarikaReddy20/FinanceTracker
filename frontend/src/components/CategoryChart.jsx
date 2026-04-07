@@ -1,19 +1,23 @@
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import { useLanguage } from "../context/LanguageContext";
 
 const COLORS = ["#1f8f5f", "#74d69b", "#0e5a39", "#b7efc5", "#95d5b2", "#2d6a4f", "#40916c"];
 
-function CategoryChart({ data, title = "Category Share" }) {
+function CategoryChart({ data, title }) {
+  const { t, translateCategory } = useLanguage();
+  const resolvedTitle = title || t("categoryShareTitle");
+
   if (!data?.length) {
-    return <div className="empty-state">No category data available for this range.</div>;
+    return <div className="empty-state">{t("noCategoryData")}</div>;
   }
 
   return (
     <div className="surface-card chart-card">
       <div className="toolbar" style={{ marginBottom: 12 }}>
         <div>
-          <h3 style={{ margin: 0 }}>{title}</h3>
+          <h3 style={{ margin: 0 }}>{resolvedTitle}</h3>
           <p className="subtle" style={{ margin: "6px 0 0" }}>
-            Percentage contribution of each expense category.
+            {t("categoryShareSubtitle")}
           </p>
         </div>
       </div>
@@ -32,8 +36,11 @@ function CategoryChart({ data, title = "Category Share" }) {
               <Cell key={`${item.category}-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip formatter={(value) => [`Rs ${Number(value).toFixed(2)}`, "Spend"]} />
-          <Legend />
+          <Tooltip
+            formatter={(value, name, item) => [`Rs ${Number(value).toFixed(2)}`, t("spendLegend")]}
+            labelFormatter={(label) => translateCategory(label)}
+          />
+          <Legend formatter={(value) => translateCategory(value)} />
         </PieChart>
       </ResponsiveContainer>
     </div>

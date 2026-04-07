@@ -9,6 +9,7 @@ import { extractBillDetails } from "../services/billExtractor.js";
 
 import Transaction from "../models/Transaction.js";
 import MerchantCategory from "../models/MerchantCategory.js";
+import UploadedDocument from "../models/UploadedDocument.js";
 import { isDuplicateTransaction } from "../utils/duplicateChecker.js";
 import {
   serializeTransaction,
@@ -55,6 +56,7 @@ const parseManualTransactionDate = (dateInput, timeInput) => {
 // =======================
 export const uploadPDF = async (req, res) => {
   let filePath;
+  let uploadedDocument;
 
   try {
     if (!req.user?.id) {
@@ -67,6 +69,15 @@ export const uploadPDF = async (req, res) => {
 
     const userId = req.user.id;
     filePath = req.file.path;
+    uploadedDocument = await UploadedDocument.create({
+      userId,
+      originalName: req.file.originalname,
+      storedName: req.file.filename,
+      storagePath: filePath,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      documentType: "PDF",
+    });
 
     const text = await parsePDF(filePath);
     const transactions = extractTransactions(text);
@@ -123,6 +134,7 @@ export const uploadPDF = async (req, res) => {
 
       const newTransaction = await Transaction.create({
         userId,
+        sourceDocumentId: uploadedDocument._id,
         date: normalizedDate,
         description: t.description,
         amount: t.amount,
@@ -147,11 +159,14 @@ export const uploadPDF = async (req, res) => {
       duplicates,
       invalidRows,
       uncategorized: serializeTransactions(uncategorized),
+      uploadedDocumentId: uploadedDocument._id,
     });
   } catch (error) {
     console.error("UPLOAD ERROR:", error);
     res.status(500).json({ message: error.message });
-  } finally {
+    if (uploadedDocument) {
+      await UploadedDocument.deleteOne({ _id: uploadedDocument._id }).catch(() => {});
+    }
     if (filePath) {
       await fs.unlink(filePath).catch(() => {});
     }
@@ -270,6 +285,7 @@ export const addManualTransaction = async (req, res) => {
 // =======================
 export const uploadBill = async (req, res) => {
   let filePath;
+  let uploadedDocument;
 
   try {
     if (!req.user?.id) {
@@ -282,6 +298,15 @@ export const uploadBill = async (req, res) => {
 
     const userId = req.user.id;
     filePath = req.file.path;
+    uploadedDocument = await UploadedDocument.create({
+      userId,
+      originalName: req.file.originalname,
+      storedName: req.file.filename,
+      storagePath: filePath,
+      mimeType: req.file.mimetype,
+      size: req.file.size,
+      documentType: "BILL",
+    });
 
     const ocrText = await extractBillText(filePath);
     const extracted = extractBillDetails(ocrText);
@@ -359,6 +384,7 @@ export const uploadBill = async (req, res) => {
 
     const transaction = await Transaction.create({
       userId,
+      sourceDocumentId: uploadedDocument._id,
       date: finalDate,
       description: finalDescription,
       amount: finalAmount,
@@ -374,11 +400,14 @@ export const uploadBill = async (req, res) => {
       transaction: serializeTransaction(transaction),
       rawText: ocrText,
       fieldConfidence: extracted.fieldConfidence,
+      uploadedDocumentId: uploadedDocument._id,
     });
   } catch (error) {
     console.error("BILL OCR ERROR:", error);
     return res.status(500).json({ message: error.message });
-  } finally {
+    if (uploadedDocument) {
+      await UploadedDocument.deleteOne({ _id: uploadedDocument._id }).catch(() => {});
+    }
     if (filePath) {
       await fs.unlink(filePath).catch(() => {});
     }
