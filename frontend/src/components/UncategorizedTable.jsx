@@ -4,6 +4,7 @@ import { useLanguage } from "../context/LanguageContext";
 
 const CATEGORY_OPTIONS = [
   "Food",
+  "Groceries",
   "Travel",
   "Shopping",
   "Bills",
@@ -23,8 +24,6 @@ function UncategorizedTable({ data, onUpdated }) {
     await API.put(`/transactions/update-category/${id}`, { category });
     notifyTransactionsUpdated();
     onUpdated?.(id);
-
-    alert(t("updated"));
   };
 
   if (!data.length) {

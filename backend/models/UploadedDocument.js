@@ -33,6 +33,11 @@ const uploadedDocumentSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    contentHash: {
+      type: String,
+      required: true,
+      trim: true,
+    },
     documentType: {
       type: String,
       enum: ["PDF", "BILL"],
@@ -43,5 +48,6 @@ const uploadedDocumentSchema = new mongoose.Schema(
 );
 
 uploadedDocumentSchema.index({ userId: 1, createdAt: -1 });
+uploadedDocumentSchema.index({ userId: 1, documentType: 1, contentHash: 1 });
 
 export default mongoose.model("UploadedDocument", uploadedDocumentSchema);

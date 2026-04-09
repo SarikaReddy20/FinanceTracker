@@ -1,4 +1,5 @@
 import fs from "fs/promises";
+import { createHash } from "crypto";
 
 import { parsePDF } from "../services/pdfParser.js";
 import { extractTransactions } from "../services/transactionExtractor.js";
@@ -19,6 +20,35 @@ import {
 
 const isValidDate = (value) => !Number.isNaN(value.getTime());
 const TIME_ONLY_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+const UNCATEGORIZED_LABEL = "Uncategorized";
+
+const cleanupUploadedDocument = async (uploadedDocument, filePath) => {
+  if (uploadedDocument?._id) {
+    await UploadedDocument.deleteOne({ _id: uploadedDocument._id }).catch(() => {});
+  }
+  if (filePath) {
+    await fs.unlink(filePath).catch(() => {});
+  }
+};
+
+const getContentHash = async (filePath) => {
+  const fileBuffer = await fs.readFile(filePath);
+  return createHash("sha256").update(fileBuffer).digest("hex");
+};
+
+const findDuplicateDocument = async ({ userId, documentType, contentHash }) => {
+  const existing = await UploadedDocument.findOne({ userId, documentType, contentHash }).lean();
+  if (!existing) {
+    return null;
+  }
+
+  const relatedTransactions = await Transaction.countDocuments({
+    userId,
+    sourceDocumentId: existing._id,
+  });
+
+  return relatedTransactions > 0 ? existing : null;
+};
 
 const parseManualTransactionDate = (dateInput, timeInput) => {
   const now = new Date();
@@ -69,6 +99,21 @@ export const uploadPDF = async (req, res) => {
 
     const userId = req.user.id;
     filePath = req.file.path;
+    const contentHash = await getContentHash(filePath);
+    const duplicateDocument = await findDuplicateDocument({
+      userId,
+      documentType: "PDF",
+      contentHash,
+    });
+
+    if (duplicateDocument) {
+      await fs.unlink(filePath).catch(() => {});
+      return res.status(409).json({
+        message: "Duplicate file upload blocked. This statement was already imported.",
+        duplicate: true,
+      });
+    }
+
     uploadedDocument = await UploadedDocument.create({
       userId,
       originalName: req.file.originalname,
@@ -77,6 +122,7 @@ export const uploadPDF = async (req, res) => {
       mimeType: req.file.mimetype,
       size: req.file.size,
       documentType: "PDF",
+      contentHash,
     });
 
     const text = await parsePDF(filePath);
@@ -139,7 +185,7 @@ export const uploadPDF = async (req, res) => {
         description: t.description,
         amount: t.amount,
         type: t.type,
-        category: category || "Uncategorized",
+        category: category || UNCATEGORIZED_LABEL,
         categorized: !!category,
         source: "PDF",
       });
@@ -149,6 +195,19 @@ export const uploadPDF = async (req, res) => {
       if (!category) {
         uncategorized.push(newTransaction);
       }
+    }
+
+    if (!saved.length) {
+      await cleanupUploadedDocument(uploadedDocument, filePath);
+      return res.status(200).json({
+        message: "No new transactions were added. This statement appears to be already imported.",
+        totalAdded: 0,
+        duplicatesCount: duplicates.length,
+        invalidRowsCount: invalidRows.length,
+        duplicates,
+        invalidRows,
+        uncategorized: [],
+      });
     }
 
     res.json({
@@ -164,12 +223,7 @@ export const uploadPDF = async (req, res) => {
   } catch (error) {
     console.error("UPLOAD ERROR:", error);
     res.status(500).json({ message: error.message });
-    if (uploadedDocument) {
-      await UploadedDocument.deleteOne({ _id: uploadedDocument._id }).catch(() => {});
-    }
-    if (filePath) {
-      await fs.unlink(filePath).catch(() => {});
-    }
+    await cleanupUploadedDocument(uploadedDocument, filePath);
   }
 };
 
@@ -280,6 +334,109 @@ export const addManualTransaction = async (req, res) => {
   }
 };
 
+export const getManualTransactions = async (req, res) => {
+  try {
+    const page = Math.max(Number.parseInt(req.query.page || "1", 10), 1);
+    const limit = Math.max(Number.parseInt(req.query.limit || "5", 10), 1);
+
+    const query = {
+      userId: req.user.id,
+      source: "MANUAL",
+    };
+
+    const [items, total] = await Promise.all([
+      Transaction.find(query)
+        .sort({ date: -1, createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments(query),
+    ]);
+
+    return res.json({
+      page,
+      limit,
+      total,
+      hasMore: page * limit < total,
+      transactions: serializeTransactions(items),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+export const updateManualTransaction = async (req, res) => {
+  try {
+    const { date, time, description, amount, type, category: manualCategory } = req.body;
+
+    if (!description || !amount || !type) {
+      return res.status(400).json({ message: "Description, amount, and type are required" });
+    }
+
+    if (!["DEBIT", "CREDIT"].includes(type)) {
+      return res.status(400).json({ message: "Invalid transaction type" });
+    }
+
+    const transaction = await Transaction.findOne({
+      _id: req.params.id,
+      userId: req.user.id,
+      source: "MANUAL",
+    });
+
+    if (!transaction) {
+      return res.status(404).json({ message: "Manual transaction not found" });
+    }
+
+    const normalizedDate = parseManualTransactionDate(date, time);
+    if (!normalizedDate || !isValidDate(normalizedDate)) {
+      return res.status(400).json({ message: "Invalid transaction date or time" });
+    }
+
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
+      return res.status(400).json({ message: "Amount must be a valid number" });
+    }
+
+    const normalizedDescription = description.trim();
+    const normalizedManualCategory = manualCategory?.trim();
+    const category = normalizedManualCategory
+      || await detectCategory(normalizedDescription, type, req.user.id);
+
+    // Duplicate check excluding the same manual transaction.
+    const timeWindow = 30 * 1000;
+    const fromTime = new Date(normalizedDate.getTime() - timeWindow);
+    const toTime = new Date(normalizedDate.getTime() + timeWindow);
+    const duplicate = await Transaction.findOne({
+      _id: { $ne: transaction._id },
+      userId: req.user.id,
+      amount: numericAmount,
+      type,
+      date: { $gte: fromTime, $lte: toTime },
+      description: normalizedDescription,
+    }).lean();
+
+    if (duplicate) {
+      return res.status(400).json({ message: "Duplicate transaction detected" });
+    }
+
+    transaction.date = normalizedDate;
+    transaction.description = normalizedDescription;
+    transaction.amount = numericAmount;
+    transaction.type = type;
+    transaction.category = category || UNCATEGORIZED_LABEL;
+    transaction.categorized = !!category;
+
+    await transaction.save();
+
+    return res.json({
+      message: "Manual transaction updated successfully",
+      transaction: serializeTransaction(transaction),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 // =======================
 // Upload Bill Image
 // =======================
@@ -298,6 +455,21 @@ export const uploadBill = async (req, res) => {
 
     const userId = req.user.id;
     filePath = req.file.path;
+    const contentHash = await getContentHash(filePath);
+    const duplicateDocument = await findDuplicateDocument({
+      userId,
+      documentType: "BILL",
+      contentHash,
+    });
+
+    if (duplicateDocument) {
+      await fs.unlink(filePath).catch(() => {});
+      return res.status(409).json({
+        message: "Duplicate file upload blocked. This bill was already imported.",
+        duplicate: true,
+      });
+    }
+
     uploadedDocument = await UploadedDocument.create({
       userId,
       originalName: req.file.originalname,
@@ -306,6 +478,7 @@ export const uploadBill = async (req, res) => {
       mimeType: req.file.mimetype,
       size: req.file.size,
       documentType: "BILL",
+      contentHash,
     });
 
     const ocrText = await extractBillText(filePath);
@@ -343,6 +516,9 @@ export const uploadBill = async (req, res) => {
     );
 
     if (missingFields.length > 0 || lowConfidenceFields.length > 0) {
+      await cleanupUploadedDocument(uploadedDocument, filePath);
+      uploadedDocument = null;
+      filePath = null;
       return res.status(200).json({
         message: "Bill extracted, but some fields need review",
         needsReview: true,
@@ -353,7 +529,7 @@ export const uploadBill = async (req, res) => {
           amount: Number.isFinite(finalAmount) ? finalAmount : null,
           date: finalDate && !Number.isNaN(finalDate.getTime()) ? toIstISOString(finalDate) : null,
           type: ["DEBIT", "CREDIT"].includes(finalType) ? finalType : null,
-          category: category || "Uncategorized",
+          category: category || UNCATEGORIZED_LABEL,
           rawText: ocrText,
           fieldConfidence: {
             ...extracted.fieldConfidence,
@@ -377,6 +553,9 @@ export const uploadBill = async (req, res) => {
     });
 
     if (isDuplicate) {
+      await cleanupUploadedDocument(uploadedDocument, filePath);
+      uploadedDocument = null;
+      filePath = null;
       return res.status(400).json({
         message: "Duplicate transaction detected",
       });
@@ -389,7 +568,7 @@ export const uploadBill = async (req, res) => {
       description: finalDescription,
       amount: finalAmount,
       type: finalType,
-      category: category || "Uncategorized",
+      category: category || UNCATEGORIZED_LABEL,
       categorized: !!category,
       source: "BILL",
     });
@@ -404,12 +583,7 @@ export const uploadBill = async (req, res) => {
     });
   } catch (error) {
     console.error("BILL OCR ERROR:", error);
+    await cleanupUploadedDocument(uploadedDocument, filePath);
     return res.status(500).json({ message: error.message });
-    if (uploadedDocument) {
-      await UploadedDocument.deleteOne({ _id: uploadedDocument._id }).catch(() => {});
-    }
-    if (filePath) {
-      await fs.unlink(filePath).catch(() => {});
-    }
   }
 };

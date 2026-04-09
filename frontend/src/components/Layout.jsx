@@ -1,16 +1,22 @@
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useLanguage } from "../context/LanguageContext";
+import { useTheme } from "../context/ThemeContext";
 import ChatbotWidget from "./ChatbotWidget";
 
 function Layout({ children }) {
-  const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
 
-  const logout = () => {
-    localStorage.clear();
-    navigate("/");
-  };
+  const profileInitial = useMemo(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "null");
+      return (user?.name || "P").trim().charAt(0).toUpperCase() || "P";
+    } catch {
+      return "P";
+    }
+  }, []);
 
   return (
     <div className="app-shell">
@@ -43,7 +49,17 @@ function Layout({ children }) {
             <Link className={`nav-link ${location.pathname === "/settings" ? "active" : ""}`} to="/settings">
               {t("navSettings")}
             </Link>
-            <button className="button-primary" onClick={logout}>{t("logout")}</button>
+            <button className="theme-icon-button" onClick={toggleTheme} aria-label={t("themeToggleLabel")}>
+              {theme === "light" ? "☾" : "◐"}
+            </button>
+            <Link
+              className={`profile-avatar-link ${location.pathname === "/profile" ? "active" : ""}`}
+              to="/profile"
+              aria-label={t("navProfile")}
+              title={t("navProfile")}
+            >
+              {profileInitial}
+            </Link>
           </div>
         </nav>
 

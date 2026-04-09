@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Goals from "./pages/Goals";
+import Profile from "./pages/Profile";
 import PrivateRoute from "./components/PrivateRoute";
 
 function App() {
@@ -68,6 +69,15 @@ function App() {
           element={
             <PrivateRoute>
               <Settings />
+            </PrivateRoute>
+          }
+        />
+
+        <Route
+          path="/profile"
+          element={
+            <PrivateRoute>
+              <Profile />
             </PrivateRoute>
           }
         />

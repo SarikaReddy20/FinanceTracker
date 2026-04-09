@@ -6,28 +6,11 @@ import MonthlyChart from "../components/MonthlyChart";
 import IncomeExpenseChart from "../components/IncomeExpenseChart";
 import { subscribeToTransactionsUpdated } from "../utils/reportEvents";
 import { useLanguage } from "../context/LanguageContext";
-
-const toInputDate = (value) => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
-};
-
-const getDefaultRange = () => {
-  const today = new Date();
-  const end = toInputDate(today);
-  const previous = new Date(today);
-  previous.setDate(previous.getDate() - 30);
-  const start = toInputDate(previous);
-
-  return { start, end };
-};
+import { useReportRange } from "../context/ReportRangeContext";
 
 function Reports() {
   const { t, translateCategory } = useLanguage();
-  const [range, setRange] = useState(getDefaultRange);
+  const { range, setRange } = useReportRange();
   const [granularity, setGranularity] = useState("day");
   const [summary, setSummary] = useState(null);
   const [trend, setTrend] = useState([]);
@@ -151,6 +134,16 @@ function Reports() {
               <button className="button-primary" onClick={handleDownload}>
                 {t("exportPdf")}
               </button>
+              <select
+                className="field"
+                value={granularity}
+                onChange={(event) => setGranularity(event.target.value)}
+              >
+                <option value="day">{t("daily")}</option>
+                <option value="week">{t("weekly")}</option>
+                <option value="month">{t("monthly")}</option>
+                <option value="year">{t("yearly")}</option>
+              </select>
             </div>
           </div>
         </div>

@@ -37,7 +37,10 @@ function CategoryChart({ data, title }) {
             ))}
           </Pie>
           <Tooltip
-            formatter={(value, name, item) => [`Rs ${Number(value).toFixed(2)}`, t("spendLegend")]}
+            formatter={(value, name, item) => [
+              `Rs ${Number(value).toFixed(2)}`,
+              translateCategory(item?.payload?.category || ""),
+            ]}
             labelFormatter={(label) => translateCategory(label)}
           />
           <Legend formatter={(value) => translateCategory(value)} />

@@ -5,6 +5,7 @@ import { serializeTransactions } from "../utils/dateFormatter.js";
 
 const IST_TIMEZONE = "Asia/Kolkata";
 const VALID_GRANULARITIES = new Set(["day", "week", "month", "year"]);
+const DEFAULT_PAGE_LIMIT = 20;
 
 const getIstToday = () => {
   const now = new Date();
@@ -199,9 +200,22 @@ const getScoreLabel = (score) => {
 };
 
 const calculateFinancialHealth = ({ totalIncome, totalExpense, categories, daily }) => {
+  const hasAnyTransaction = totalIncome > 0 || totalExpense > 0 || daily.length > 0;
+  if (!hasAnyTransaction) {
+    return {
+      score: 0,
+      label: "No data available",
+      factors: {
+        savingsRatio: 0,
+        overspendingFrequency: 0,
+        categoryBalance: 0,
+      },
+    };
+  }
+
   const savingsRatio = totalIncome > 0
     ? Math.max((totalIncome - totalExpense) / totalIncome, 0)
-    : totalExpense > 0 ? 0 : 0.5;
+    : 0;
   const savingsScore = Math.min(savingsRatio / 0.3, 1) * 40;
 
   const spendingDays = daily.filter((item) => item.expense > 0).length;
@@ -230,8 +244,25 @@ const calculateFinancialHealth = ({ totalIncome, totalExpense, categories, daily
   };
 };
 
+const buildSmartSummary = ({ comparison, strongestCategory }) => {
+  if (!comparison || (comparison.current === 0 && comparison.previous === 0)) {
+    return "No data available";
+  }
+
+  if (comparison.change === 0) {
+    return "Your spending stayed stable compared with the previous period.";
+  }
+
+  const direction = comparison.change > 0 ? "more" : "less";
+  return `You spent ${Math.abs(comparison.changePercent).toFixed(2)}% ${direction} this period mainly on ${strongestCategory}.`;
+};
+
 const getSummaryPayload = async ({ userId, startDate, endDate }) => {
-  const [categoryBreakdown, totals, daily, weekly, monthly, yearly, comparison, recentTransactions] =
+  const rangeLength = endDate.getTime() - startDate.getTime();
+  const previousEnd = new Date(startDate.getTime() - 1);
+  const previousStart = new Date(previousEnd.getTime() - rangeLength);
+
+  const [categoryBreakdown, previousCategoryBreakdown, totals, daily, weekly, monthly, yearly, comparison, recentTransactions, uncategorizedTransactions] =
     await Promise.all([
       Transaction.aggregate([
         {
@@ -244,6 +275,17 @@ const getSummaryPayload = async ({ userId, startDate, endDate }) => {
           },
         },
         { $sort: { total: -1 } },
+      ]),
+      Transaction.aggregate([
+        {
+          $match: getMatchStage(userId, previousStart, previousEnd, "DEBIT"),
+        },
+        {
+          $group: {
+            _id: "$category",
+            total: { $sum: "$amount" },
+          },
+        },
       ]),
       Transaction.aggregate([
         {
@@ -273,7 +315,14 @@ const getSummaryPayload = async ({ userId, startDate, endDate }) => {
       getPeriodComparison({ userId, startDate, endDate }),
       Transaction.find(getMatchStage(userId, startDate, endDate))
         .sort({ date: -1 })
-        .limit(6)
+        .limit(10)
+        .lean(),
+      Transaction.find({
+        ...getMatchStage(userId, startDate, endDate, "DEBIT"),
+        $or: [{ categorized: false }, { category: "Uncategorized" }],
+      })
+        .sort({ date: -1 })
+        .limit(20)
         .lean(),
     ]);
 
@@ -288,6 +337,21 @@ const getSummaryPayload = async ({ userId, startDate, endDate }) => {
       ? Number(((item.total / totalExpense) * 100).toFixed(2))
       : 0,
   }));
+
+  const previousCategoryMap = new Map(
+    previousCategoryBreakdown.map((item) => [item._id || "Uncategorized", item.total || 0]),
+  );
+  let strongestCategory = categories[0]?.category || "Uncategorized";
+  let strongestDelta = Number.NEGATIVE_INFINITY;
+
+  for (const item of categories) {
+    const previous = previousCategoryMap.get(item.category) || 0;
+    const delta = item.total - previous;
+    if (delta > strongestDelta) {
+      strongestDelta = delta;
+      strongestCategory = item.category;
+    }
+  }
 
   return {
     totals: {
@@ -305,6 +369,7 @@ const getSummaryPayload = async ({ userId, startDate, endDate }) => {
     },
     comparison,
     recentTransactions: serializeTransactions(recentTransactions),
+    uncategorizedTransactions: serializeTransactions(uncategorizedTransactions),
     insights: {
       topCategory: categories[0]?.category || "No spending data",
       topCategorySpend: categories[0]?.total || 0,
@@ -317,8 +382,63 @@ const getSummaryPayload = async ({ userId, startDate, endDate }) => {
         categories,
         daily,
       }),
+      smartSummary: buildSmartSummary({
+        comparison,
+        strongestCategory,
+      }),
     },
   };
+};
+
+export const getTransactionFeed = async (req, res) => {
+  try {
+    const range = parseDateRange(req.query.start, req.query.end);
+    const page = Math.max(Number.parseInt(req.query.page || "1", 10), 1);
+    const limit = Math.max(Number.parseInt(req.query.limit || String(DEFAULT_PAGE_LIMIT), 10), 1);
+    const selectedCategory = typeof req.query.category === "string" && req.query.category.trim()
+      ? req.query.category.trim()
+      : "";
+    const selectedSource = typeof req.query.source === "string" && req.query.source.trim()
+      ? req.query.source.trim().toUpperCase()
+      : "";
+    const filterType = typeof req.query.filterType === "string" ? req.query.filterType.trim().toLowerCase() : "";
+    const allowedSources = new Set(["PDF", "BILL", "MANUAL", "CSV"]);
+
+    if (!range) {
+      return res.status(400).json({ message: "Invalid date range" });
+    }
+
+    const query = getMatchStage(req.user.id, range.startDate, range.endDate);
+    if (selectedCategory) {
+      query.category = selectedCategory;
+    }
+    if (selectedSource && allowedSources.has(selectedSource)) {
+      query.source = selectedSource;
+    }
+    if (filterType === "uncategorized") {
+      query.type = "DEBIT";
+      query.$or = [{ categorized: false }, { category: "Uncategorized" }];
+    }
+
+    const [items, total] = await Promise.all([
+      Transaction.find(query)
+        .sort({ date: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Transaction.countDocuments(query),
+    ]);
+
+    return res.json({
+      page,
+      limit,
+      total,
+      hasMore: page * limit < total,
+      transactions: serializeTransactions(items),
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
 };
 
 export const getDashboardReport = async (req, res) => {

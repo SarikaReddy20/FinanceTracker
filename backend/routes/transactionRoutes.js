@@ -6,6 +6,8 @@ import {
   uploadBill,
   updateCategory,
   addManualTransaction,
+  getManualTransactions,
+  updateManualTransaction,
 } from "../controllers/transactionController.js";
 import { protect } from "../middleware/authMiddleware.js";
 
@@ -15,5 +17,7 @@ router.post("/upload-pdf", protect, upload.single("file"), uploadPDF);
 router.post("/upload-bill", protect, billUpload.single("file"), uploadBill);
 router.put("/update-category/:id", protect, updateCategory);
 router.post("/manual", protect, addManualTransaction);
+router.get("/manual", protect, getManualTransactions);
+router.put("/manual/:id", protect, updateManualTransaction);
 
 export default router;
