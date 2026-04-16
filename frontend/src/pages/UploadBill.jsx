@@ -4,14 +4,39 @@ import Layout from "../components/Layout";
 import { notifyTransactionsUpdated } from "../utils/reportEvents";
 import { useLanguage } from "../context/LanguageContext";
 
+const toDatetimeLocalValue = (value) => {
+  if (!value) {
+    return "";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  const hours = String(parsed.getHours()).padStart(2, "0");
+  const minutes = String(parsed.getMinutes()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
 function UploadBill() {
   const { t, translateCategory, translateDocumentType } = useLanguage();
   const [file, setFile] = useState(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [reviewForm, setReviewForm] = useState({
+    description: "",
+    amount: "",
+    date: "",
+    category: "",
+    type: "DEBIT",
+  });
 
-  const handleUpload = async () => {
+  const uploadWithOverrides = async (overrides = null) => {
     if (!file) {
       setError(t("selectBillFirst"));
       return;
@@ -20,17 +45,63 @@ function UploadBill() {
     const formData = new FormData();
     formData.append("file", file);
 
+    if (overrides) {
+      if (overrides.description?.trim()) {
+        formData.append("description", overrides.description.trim());
+      }
+      if (overrides.amount !== "" && overrides.amount !== null && overrides.amount !== undefined) {
+        formData.append("amount", String(overrides.amount));
+      }
+      if (overrides.date) {
+        formData.append("date", overrides.date);
+      }
+      if (overrides.type) {
+        formData.append("type", overrides.type);
+      }
+      if (overrides.category?.trim()) {
+        formData.append("category", overrides.category.trim());
+      }
+    }
+
+    const res = await API.post("/transactions/upload-bill", formData);
+    setResult(res.data);
+
+    if (res.data.needsReview && res.data.extracted) {
+      setReviewForm({
+        description: res.data.extracted.description || "",
+        amount: res.data.extracted.amount ?? "",
+        date: toDatetimeLocalValue(res.data.extracted.date),
+        category: res.data.extracted.category || "",
+        type: res.data.extracted.type || "DEBIT",
+      });
+    }
+
+    if (res.data.transaction) {
+      notifyTransactionsUpdated();
+    }
+  };
+
+  const handleUpload = async () => {
     try {
       setLoading(true);
       setError("");
       setResult(null);
+      await uploadWithOverrides();
+    } catch (err) {
+      setError(err.response?.data?.message || t("billUploadFailed"));
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      const res = await API.post("/transactions/upload-bill", formData);
-      setResult(res.data);
-
-      if (res.data.transaction) {
-        notifyTransactionsUpdated();
-      }
+  const handleReviewSubmit = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      await uploadWithOverrides({
+        ...reviewForm,
+        amount: reviewForm.amount === "" ? "" : Number(reviewForm.amount),
+      });
     } catch (err) {
       setError(err.response?.data?.message || t("billUploadFailed"));
     } finally {
@@ -141,7 +212,8 @@ function UploadBill() {
                   <strong>
                     {t("description")}: {Math.round((extracted.fieldConfidence.description || 0) * 100)}%,{" "}
                     {t("amount")}: {Math.round((extracted.fieldConfidence.amount || 0) * 100)}%,{" "}
-                    {t("date")}: {Math.round((extracted.fieldConfidence.date || 0) * 100)}%
+                    {t("date")}: {Math.round((extracted.fieldConfidence.date || 0) * 100)}%,{" "}
+                    {t("typeLabel")}: {Math.round((extracted.fieldConfidence.type || 0) * 100)}%
                   </strong>
                 </div>
               ) : null}
@@ -157,6 +229,61 @@ function UploadBill() {
           {result.lowConfidenceFields?.length ? (
             <div className="status-banner status-warning" style={{ marginTop: 12 }}>
               <strong>{t("lowConfidenceFields")}:</strong> {result.lowConfidenceFields.join(", ")}
+            </div>
+          ) : null}
+
+          {result.needsReview ? (
+            <div className="surface-card report-card" style={{ marginTop: 18 }}>
+              <h4>Review & Confirm</h4>
+              <div className="detail-grid">
+                <label className="detail-item">
+                  <span className="subtle">{t("description")}</span>
+                  <input
+                    type="text"
+                    value={reviewForm.description}
+                    onChange={(e) => setReviewForm((prev) => ({ ...prev, description: e.target.value }))}
+                  />
+                </label>
+                <label className="detail-item">
+                  <span className="subtle">{t("amount")}</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={reviewForm.amount}
+                    onChange={(e) => setReviewForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  />
+                </label>
+                <label className="detail-item">
+                  <span className="subtle">{t("date")}</span>
+                  <input
+                    type="datetime-local"
+                    value={reviewForm.date}
+                    onChange={(e) => setReviewForm((prev) => ({ ...prev, date: e.target.value }))}
+                  />
+                </label>
+                <label className="detail-item">
+                  <span className="subtle">{t("category")}</span>
+                  <input
+                    type="text"
+                    value={reviewForm.category}
+                    onChange={(e) => setReviewForm((prev) => ({ ...prev, category: e.target.value }))}
+                  />
+                </label>
+                <label className="detail-item">
+                  <span className="subtle">{t("typeLabel")}</span>
+                  <select
+                    value={reviewForm.type}
+                    onChange={(e) => setReviewForm((prev) => ({ ...prev, type: e.target.value }))}
+                  >
+                    <option value="DEBIT">{t("debit")}</option>
+                    <option value="CREDIT">{t("credit")}</option>
+                  </select>
+                </label>
+              </div>
+              <button className="button-primary" onClick={handleReviewSubmit} disabled={loading} style={{ marginTop: 12 }}>
+                {loading ? "..." : "Confirm & Save"}
+              </button>
             </div>
           ) : null}
 

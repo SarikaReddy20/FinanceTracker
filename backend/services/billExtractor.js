@@ -7,6 +7,34 @@ const DATE_PATTERNS = [
 const TWELVE_HOUR_TIME_PATTERN = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i;
 const TWENTY_FOUR_HOUR_TIME_PATTERN = /\b([01]?\d|2[0-3]):([0-5]\d)\b/;
 const TWENTY_FOUR_HOUR_COMPACT_PATTERN = /\b(?:time[:\s]*)?([01]?\d|2[0-3])([0-5]\d)\s*(?:hrs?)\b/i;
+const LABELLED_TIME_PATTERN = /\b(?:time|txn time|transaction time|tm)\b[^\d]{0,8}([01]?\d|2[0-3])[:.]([0-5]\d)\b/i;
+const LABELLED_DATE_PATTERN = /\b(?:date|txn date|transaction date|dt)\b[^\d]{0,8}(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/i;
+
+const CREDIT_KEYWORDS = [
+  "cash deposit",
+  "deposit",
+  "credited",
+  "credit",
+  "refund",
+  "cashback",
+  "received",
+  "salary",
+  "interest credited",
+  "successful deposit",
+  " cr ",
+];
+
+const DEBIT_KEYWORDS = [
+  "debited",
+  "debit",
+  "purchase",
+  "payment",
+  "paid",
+  "withdrawal",
+  "dr ",
+  "expense",
+  "spent",
+];
 
 const DESCRIPTION_IGNORE_PATTERNS = [
   /^tax invoice$/i,
@@ -43,9 +71,14 @@ const DESCRIPTION_BONUSES = [
   { pattern: /\btgspdcl|electricity|bill|recharge|airtel|jio|broadband|internet\b/i, score: 0.25 },
   { pattern: /\bgruha jyothi\b/i, score: 0.3 },
   { pattern: /\bbook\s*shop|book\s*shoppe|stationery|books\b/i, score: 0.28 },
+  { pattern: /\bstate bank of india|customer advice|cash deposit\b/i, score: 0.28 },
 ];
 
 const AMOUNT_PATTERNS = [
+  { label: "deposit amount", regex: /deposit amount[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 1.0 },
+  { label: "received amount", regex: /received amount[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.99 },
+  { label: "net payable", regex: /net payable[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.99 },
+  { label: "total due", regex: /total due[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.99 },
   { label: "net bill amount", regex: /net bill amount[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.98 },
   { label: "bill amount", regex: /bill amount[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.96 },
   { label: "grand total", regex: /grand total[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.96 },
@@ -56,13 +89,16 @@ const AMOUNT_PATTERNS = [
   { label: "net amount", regex: /net amount[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.92 },
   { label: "cash", regex: /\bcash\b[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.88 },
   { label: "total", regex: /\btotal\b[^\d-]{0,20}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.88 },
-  { label: "currency", regex: /(?:rs\.?|inr|₹)[^\d-]{0,5}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.72 },
+  { label: "currency", regex: /(?:rs\.?|inr)[^\d-]{0,5}(-?[\d,]+(?:\.\d{1,2})?)/i, score: 0.72 },
 ];
 
 const normalizeWhitespace = (value) => value.replace(/\s+/g, " ").trim();
 const clamp = (value, min = 0, max = 1) => Math.min(max, Math.max(min, value));
 const isInvoiceNoiseLine = (line) =>
   /\b(book|shop|shoppe|gstin|state name|mehdipatnam|invoice|customer)\b/i.test(line);
+const isTaxSummaryLine = (line) =>
+  /\b(cgst|sgst|igst|taxable|cess|hsn|gross sale value|promo discount|savings)\b/i.test(line);
+const hasCreditMarker = (line) => /\b(cr|credit|deposit|refund|cashback|received)\b/i.test(line);
 
 const cleanLines = (text) =>
   text
@@ -114,7 +150,7 @@ const scoreDescriptionCandidate = (line, index, lines) => {
 
 const getDescriptionCandidates = (lines) => {
   const candidates = lines
-    .slice(0, 10)
+    .slice(0, 12)
     .map((line, index) => scoreDescriptionCandidate(line, index, lines))
     .filter(Boolean)
     .sort((a, b) => b.confidence - a.confidence);
@@ -131,7 +167,39 @@ const getDescriptionCandidates = (lines) => {
     return [{ value: fallback, confidence: 0.75 }];
   }
 
+  if (joined.includes("state bank of india") || joined.includes("customer advice")) {
+    return [{ value: "SBI Cash Deposit", confidence: 0.76 }];
+  }
+
   return [];
+};
+
+const sortAmountCandidates = (candidates) => candidates.sort((a, b) => {
+  if (b.confidence !== a.confidence) {
+    return b.confidence - a.confidence;
+  }
+  return b.value - a.value;
+});
+
+const boostLargePrimaryAmount = (candidates) => {
+  if (!candidates.length) {
+    return candidates;
+  }
+
+  const top = candidates[0];
+  if (top.value >= 100) {
+    return candidates;
+  }
+
+  const likelyPrimaryLarge = candidates.find(
+    (c) => c.value >= 100 && /(bill amount|total due|net|paid|deposit|received|amount)/i.test(c.line),
+  );
+
+  if (likelyPrimaryLarge) {
+    likelyPrimaryLarge.confidence = clamp(likelyPrimaryLarge.confidence + 0.12);
+  }
+
+  return sortAmountCandidates(candidates);
 };
 
 const getAmountCandidates = (text) => {
@@ -161,8 +229,17 @@ const getAmountCandidates = (text) => {
       if (pattern.label === "currency" && isInvoiceNoiseLine(line)) {
         confidence -= 0.18;
       }
+      if (isTaxSummaryLine(line)) {
+        confidence -= 0.2;
+      }
       if (/\d+\.\d{2}\b/.test(match[1])) {
         confidence += 0.04;
+      }
+      if ((/deposit amount|received amount|cash deposit/i.test(line) || hasCreditMarker(line)) && amount > 0) {
+        confidence += 0.06;
+      }
+      if (/total|payable|due|amount paid|received/i.test(line) && amount < 20) {
+        confidence -= 0.18;
       }
 
       candidates.push({
@@ -174,50 +251,59 @@ const getAmountCandidates = (text) => {
     }
   }
 
-  if (candidates.length) {
-    return candidates.sort((a, b) => {
-      if (b.confidence !== a.confidence) {
-        return b.confidence - a.confidence;
+  if (!candidates.length) {
+    const fallbackLines = lines.filter(
+      (line) =>
+        !isDateLikeText(line) &&
+        !/^time[:\s]/i.test(line) &&
+        !/^dt[:\s]/i.test(line) &&
+        !isInvoiceNoiseLine(line) &&
+        !isTaxSummaryLine(line) &&
+        (/(?:rs\.?|inr)/i.test(line) || /\d+\.\d{2}\b/.test(line)),
+    );
+
+    for (const line of fallbackLines) {
+      const matches = [...line.matchAll(/(-?[\d,]+(?:\.\d{1,2})?)/g)];
+      for (const match of matches) {
+        const amount = Number.parseFloat(match[1].replace(/,/g, ""));
+        if (!Number.isFinite(amount)) {
+          continue;
+        }
+
+        candidates.push({
+          value: amount,
+          label: "fallback",
+          line,
+          confidence: clamp((/\d+\.\d{2}\b/.test(match[1]) ? 0.56 : 0.42) + (/total|paid|due|payable|deposit/i.test(line) ? 0.08 : 0)),
+        });
       }
-      return b.value - a.value;
-    });
-  }
-
-const fallbackLines = lines.filter(
-    (line) =>
-      !isDateLikeText(line) &&
-      !/^time[:\s]/i.test(line) &&
-      !/^dt[:\s]/i.test(line) &&
-      !isInvoiceNoiseLine(line) &&
-      (/(?:rs\.?|inr|₹)/i.test(line) || /\d+\.\d{2}\b/.test(line)),
-  );
-
-  for (const line of fallbackLines) {
-    const matches = [...line.matchAll(/(-?[\d,]+(?:\.\d{1,2})?)/g)];
-    for (const match of matches) {
-      const amount = Number.parseFloat(match[1].replace(/,/g, ""));
-      if (!Number.isFinite(amount)) {
-        continue;
-      }
-
-      candidates.push({
-        value: amount,
-        label: "fallback",
-        line,
-        confidence: clamp(/\d+\.\d{2}\b/.test(match[1]) ? 0.56 : 0.42),
-      });
     }
   }
 
-  return candidates.sort((a, b) => {
-    if (b.confidence !== a.confidence) {
-      return b.confidence - a.confidence;
-    }
-    return b.value - a.value;
-  });
+  let sorted = sortAmountCandidates(candidates);
+  sorted = boostLargePrimaryAmount(sorted);
+
+  const totalDueCandidate = sorted.find((c) => /total due/i.test(c.line));
+  const billAmountCandidate = sorted.find((c) => /bill amount/i.test(c.line));
+  if (totalDueCandidate && billAmountCandidate && totalDueCandidate.value > billAmountCandidate.value) {
+    totalDueCandidate.confidence = clamp(totalDueCandidate.confidence + 0.08);
+    sorted = sortAmountCandidates(sorted);
+  }
+
+  return sorted;
 };
 
 const parseDate = (text) => {
+  const labelledDateMatch = text.match(LABELLED_DATE_PATTERN);
+  if (labelledDateMatch) {
+    const [, day, month, year] = labelledDateMatch;
+    const normalizedYear = year.length === 2 ? `20${year}` : year;
+    return {
+      value: { year: normalizedYear, month, day },
+      confidence: 0.98,
+    };
+  }
+
   for (const pattern of DATE_PATTERNS) {
     const match = text.match(pattern);
     if (!match) {
@@ -262,6 +348,18 @@ const parseDate = (text) => {
 };
 
 const parseTime = (text) => {
+  const labelledTimeMatch = text.match(LABELLED_TIME_PATTERN);
+  if (labelledTimeMatch) {
+    return {
+      value: {
+        hours: Number(labelledTimeMatch[1]),
+        minutes: Number(labelledTimeMatch[2]),
+        meridiem: null,
+      },
+      confidence: 0.97,
+    };
+  }
+
   const twelveHourMatch = text.match(TWELVE_HOUR_TIME_PATTERN);
   if (twelveHourMatch) {
     const hours = Number(twelveHourMatch[1]);
@@ -331,6 +429,42 @@ const combineDateAndTime = (dateParts, timeParts) => {
   );
 };
 
+const detectTransactionType = (text, amountCandidates = []) => {
+  const normalized = ` ${text.toLowerCase()} `;
+  let creditScore = 0;
+  let debitScore = 0;
+
+  for (const token of CREDIT_KEYWORDS) {
+    if (normalized.includes(token)) {
+      creditScore += token.includes(" cr ") ? 0.45 : 0.3;
+    }
+  }
+
+  for (const token of DEBIT_KEYWORDS) {
+    if (normalized.includes(token)) {
+      debitScore += token === "dr " ? 0.45 : 0.3;
+    }
+  }
+
+  const preferredAmountLine = amountCandidates[0]?.line || "";
+  if (hasCreditMarker(preferredAmountLine) || /cash deposit/i.test(preferredAmountLine)) {
+    creditScore += 0.3;
+  }
+  if (/\bwithdrawal|debited|purchase|bill payment\b/i.test(preferredAmountLine)) {
+    debitScore += 0.3;
+  }
+
+  if (creditScore === 0 && debitScore === 0) {
+    return { value: "DEBIT", confidence: 0.55 };
+  }
+
+  if (creditScore >= debitScore) {
+    return { value: "CREDIT", confidence: clamp(0.62 + (creditScore - debitScore) * 0.2) };
+  }
+
+  return { value: "DEBIT", confidence: clamp(0.62 + (debitScore - creditScore) * 0.2) };
+};
+
 const normalizeDescription = (description, lines) => {
   if (!description) {
     return description;
@@ -356,6 +490,14 @@ const normalizeDescription = (description, lines) => {
     return "Universal Book Shop";
   }
 
+  if (joined.includes("state bank of india") && joined.includes("customer advice")) {
+    return "SBI Cash Deposit";
+  }
+
+  if (joined.includes("cash deposit")) {
+    return "Cash Deposit";
+  }
+
   return description;
 };
 
@@ -367,6 +509,7 @@ export const extractBillDetails = (ocrText) => {
   const amountCandidates = getAmountCandidates(ocrText);
   const dateCandidate = parseDate(normalizedText);
   const timeCandidate = parseTime(normalizedText);
+  const typeCandidate = detectTransactionType(normalizedText, amountCandidates);
 
   const description = normalizeDescription(descriptionCandidates[0]?.value ?? null, lines);
   const amount = amountCandidates[0]?.value ?? null;
@@ -377,6 +520,7 @@ export const extractBillDetails = (ocrText) => {
     amount: amountCandidates[0]?.confidence ?? 0,
     date: dateCandidate?.confidence ?? 0,
     time: timeCandidate?.confidence ?? 0,
+    type: typeCandidate.confidence,
   };
 
   const missingFields = [];
@@ -397,6 +541,7 @@ export const extractBillDetails = (ocrText) => {
     description: fieldConfidence.description,
     amount: fieldConfidence.amount,
     date: fieldConfidence.date,
+    type: fieldConfidence.type,
   })
     .filter(([, confidence]) => confidence > 0 && confidence < 0.65)
     .map(([field]) => field);
@@ -405,7 +550,7 @@ export const extractBillDetails = (ocrText) => {
     description,
     amount,
     date,
-    type: "DEBIT",
+    type: typeCandidate.value,
     rawText: ocrText,
     missingFields,
     lowConfidenceFields,

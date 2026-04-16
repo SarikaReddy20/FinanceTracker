@@ -488,6 +488,7 @@ export const uploadBill = async (req, res) => {
     const finalAmount = req.body.amount ? Number(req.body.amount) : extracted.amount;
     const finalDate = req.body.date ? new Date(req.body.date) : extracted.date;
     const finalType = req.body.type || extracted.type || "DEBIT";
+    const manualCategory = typeof req.body.category === "string" ? req.body.category.trim() : "";
 
     const missingFields = [];
 
@@ -507,9 +508,10 @@ export const uploadBill = async (req, res) => {
       missingFields.push("type");
     }
 
-    const category = finalDescription
+    const detectedCategory = finalDescription
       ? await detectCategory(finalDescription, finalType, userId)
       : null;
+    const category = manualCategory || detectedCategory;
 
     const lowConfidenceFields = extracted.lowConfidenceFields.filter(
       (field) => !req.body[field],
@@ -537,6 +539,7 @@ export const uploadBill = async (req, res) => {
             ...(req.body.amount ? { amount: 1 } : {}),
             ...(req.body.date ? { date: 1, time: extracted.fieldConfidence.time || 0 } : {}),
             ...(req.body.type ? { type: 1 } : {}),
+            ...(req.body.category ? { category: 1 } : {}),
           },
           descriptionCandidates: extracted.descriptionCandidates,
           amountCandidates: extracted.amountCandidates,
