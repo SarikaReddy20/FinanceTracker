@@ -1,4 +1,4 @@
-# SpendSmart Frontend Setup
+# SpendSmart Setup
 
 ## Overview
 
